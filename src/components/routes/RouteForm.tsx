@@ -101,14 +101,6 @@ export function RouteForm({ driverId, date, route, onSubmit, isEditing = false }
   const [routeStatuses, setRouteStatuses] = useState<Schema["routeStatuses"][]>([]);
   const { toast } = useToast();
   const { data: session } = fine.auth.useSession();
-  
-  // New state for hometime dates
-  const [hometimeStartDate, setHometimeStartDate] = useState<Date | undefined>(
-    route?.statusStartDate ? new Date(route.statusStartDate) : new Date(date)
-  );
-  const [hometimeEndDate, setHometimeEndDate] = useState<Date | undefined>(
-    route?.statusEndDate ? new Date(route.statusEndDate) : new Date(date)
-  );
 
   useEffect(() => {
     const fetchDivisions = async () => {
@@ -517,15 +509,6 @@ export function RouteForm({ driverId, date, route, onSubmit, isEditing = false }
       newErrors.previousRoutes = "Please select at least one previous route";
     }
 
-    if (formData.status === "Hometime") {
-      if (!hometimeStartDate) {
-        newErrors.hometimeStartDate = "Start date is required for Hometime";
-      }
-      if (!hometimeEndDate) {
-        newErrors.hometimeEndDate = "End date is required for Hometime";
-      }
-    }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -586,8 +569,6 @@ export function RouteForm({ driverId, date, route, onSubmit, isEditing = false }
         date,
         mileage: calculatedMileage || 0,
         previousRouteIds: selectedPreviousRoutes.length > 0 ? JSON.stringify(selectedPreviousRoutes) : null,
-        statusStartDate: formData.status === "Hometime" && hometimeStartDate ? format(hometimeStartDate, 'yyyy-MM-dd') : null,
-        statusEndDate: formData.status === "Hometime" && hometimeEndDate ? format(hometimeEndDate, 'yyyy-MM-dd') : null,
         comments: comments.length > 0 ? JSON.stringify(comments) : null
       };
 
@@ -828,40 +809,6 @@ export function RouteForm({ driverId, date, route, onSubmit, isEditing = false }
           )}
         </div>
       </div>
-
-      {formData.status === "Hometime" && (
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label>Hometime Start Date</Label>
-            <Input
-              type="date"
-              value={hometimeStartDate ? format(hometimeStartDate, 'yyyy-MM-dd') : ''}
-              onChange={(e) => {
-                if (e.target.value) {
-                  setHometimeStartDate(new Date(e.target.value));
-                }
-              }}
-              className={errors.hometimeStartDate ? "border-destructive" : ""}
-            />
-            {errors.hometimeStartDate && <p className="text-sm text-destructive">{errors.hometimeStartDate}</p>}
-          </div>
-
-          <div className="space-y-2">
-            <Label>Hometime End Date</Label>
-            <Input
-              type="date"
-              value={hometimeEndDate ? format(hometimeEndDate, 'yyyy-MM-dd') : ''}
-              onChange={(e) => {
-                if (e.target.value) {
-                  setHometimeEndDate(new Date(e.target.value));
-                }
-              }}
-              className={errors.hometimeEndDate ? "border-destructive" : ""}
-            />
-            {errors.hometimeEndDate && <p className="text-sm text-destructive">{errors.hometimeEndDate}</p>}
-          </div>
-        </div>
-      )}
 
       {formData.status === "Driving previous route" && (
         <div className="space-y-2">

@@ -52,7 +52,7 @@ export function DriverTable({ currentDate }: DriverTableProps) {
   const [filterField, setFilterField] = useState("firstName");
   // Update to match exactly the columns specified in requirements
   const [activeFilters, setActiveFilters] = useState<string[]>([
-    "count", "percentage", "firstName", "lastName", "dispatcher"
+    "count", "percentage", "firstName", "lastName", "phone", "dispatcher"
   ]);
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   const { toast } = useToast();
@@ -121,6 +121,7 @@ export function DriverTable({ currentDate }: DriverTableProps) {
       percentage: "Percentage",
       firstName: "First Name",
       lastName: "Last Name",
+      phone: "Phone",
       dispatcher: "Dispatcher"
     }[filterField] || filterField;
     
@@ -257,6 +258,7 @@ export function DriverTable({ currentDate }: DriverTableProps) {
       "#", 
       "%", 
       "Driver Name", 
+      "Phone",
       "Dispatcher", 
       ...weekDays.map(day => `${day.dayName} ${day.dayNumber}`),
       "Total Gross",
@@ -300,6 +302,7 @@ export function DriverTable({ currentDate }: DriverTableProps) {
         driver.count,
         `${driver.percentage}%`,
         `${driver.firstName} ${driver.lastName}`,
+        driver.phone || "",
         driver.dispatcher,
         ...dailyRoutes,
         `$${weeklyTotalGross.toFixed(2)}`,
@@ -313,7 +316,7 @@ export function DriverTable({ currentDate }: DriverTableProps) {
     const csvContent = [
       headers.join(","),
       ...rows.map(row => row.map(cell => `"${cell}"`).join(","))
-    ].join("\\\n");
+    ].join("\\n");
     
     // Create download link
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -347,7 +350,7 @@ export function DriverTable({ currentDate }: DriverTableProps) {
       
       // Table headers
       const headers = [
-        "#", "%", "Driver", "Dispatcher", "Total Gross", "Earnings"
+        "#", "%", "Driver", "Phone", "Dispatcher", "Total Gross", "Earnings"
       ];
       
       // Table data
@@ -374,6 +377,7 @@ export function DriverTable({ currentDate }: DriverTableProps) {
           driver.count.toString(),
           `${driver.percentage}%`,
           `${driver.firstName} ${driver.lastName}`,
+          driver.phone || "-",
           driver.dispatcher,
           formatCurrency(weeklyTotalGross),
           formatCurrency(totalEarnings)
@@ -486,6 +490,7 @@ export function DriverTable({ currentDate }: DriverTableProps) {
                       <option value="percentage">Percentage</option>
                       <option value="firstName">First Name</option>
                       <option value="lastName">Last Name</option>
+                      <option value="phone">Phone</option>
                       <option value="dispatcher">Dispatcher</option>
                     </select>
                   </div>
@@ -550,6 +555,14 @@ export function DriverTable({ currentDate }: DriverTableProps) {
                     </div>
                     <div className="flex items-center space-x-2">
                       <Checkbox 
+                        id="column-phone" 
+                        checked={activeFilters.includes('phone')}
+                        onCheckedChange={() => toggleFilterField('phone')}
+                      />
+                      <Label htmlFor="column-phone">Phone</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox 
                         id="column-dispatcher" 
                         checked={activeFilters.includes('dispatcher')}
                         onCheckedChange={() => toggleFilterField('dispatcher')}
@@ -600,7 +613,7 @@ export function DriverTable({ currentDate }: DriverTableProps) {
       </div>
       
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-sm" ref={tableRef}>
+        <table className="w-full border-collapse text-sm driver-table" ref={tableRef}>
           <thead>
             <tr className="bg-muted">
               {activeFilters.includes('count') && (
@@ -611,6 +624,9 @@ export function DriverTable({ currentDate }: DriverTableProps) {
               )}
               {(activeFilters.includes('firstName') || activeFilters.includes('lastName')) && (
                 <th className="p-2 text-left font-medium text-muted-foreground">Driver Name</th>
+              )}
+              {activeFilters.includes('phone') && (
+                <th className="p-2 text-left font-medium text-muted-foreground">Phone</th>
               )}
               {activeFilters.includes('dispatcher') && (
                 <th className="p-2 text-left font-medium text-muted-foreground">Dispatcher</th>

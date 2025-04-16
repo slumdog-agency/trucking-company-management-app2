@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Schema } from "@/lib/db-types";
 import { fine } from "@/lib/fine";
 import { useToast } from "@/hooks/use-toast";
-import { Edit2, Save, Trash2, Plus, Search, Download, FileText } from "lucide-react";
+import { Edit2, Save, Trash2, Plus, Search, Download, FileText, X } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -545,7 +545,7 @@ export default function TrailersPage() {
                   onClick={() => removeFilter(index)}
                   className="text-muted-foreground hover:text-foreground"
                 >
-                  <Search className="h-3 w-3" />
+                  <X className="h-3 w-3" />
                 </button>
               </div>
             ))}

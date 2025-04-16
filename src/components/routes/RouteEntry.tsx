@@ -59,9 +59,9 @@ export function RouteEntry({ driverId, date, routes, onAddRoute, onUpdateRoute }
     total + (route.soldFor ? route.rate - route.soldFor : 0), 0);
 
   return (
-    <div className="min-h-[60px] p-1">
+    <div className="min-h-[66px] p-1 route-entry">
       {routes.length > 0 ? (
-        <div className="space-y-2">
+        <div className="space-y-2 route-entry-content">
           {routes.map((route) => (
             <div 
               key={route.id} 

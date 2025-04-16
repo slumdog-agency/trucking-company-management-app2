@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Schema } from "@/lib/db-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Edit2, Save, Trash2 } from "lucide-react";
+import { Edit2, Save, Trash2, Phone } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { RouteEntry } from "@/components/routes/RouteEntry";
 import { fine } from "@/lib/fine";
@@ -105,6 +105,12 @@ export function DriverRow({
     }
   };
 
+  const handleCallDriver = () => {
+    if (driver.phone) {
+      window.location.href = `tel:${driver.phone}`;
+    }
+  };
+
   // Filter routes for this driver
   const driverRoutes = routes.filter(route => route.driverId === driver.id);
 
@@ -150,6 +156,22 @@ export function DriverRow({
           >
             {driver.firstName} {driver.lastName}
           </button>
+        </td>
+      )}
+      
+      {activeFilters.includes('phone') && (
+        <td className="p-2">
+          {driver.phone ? (
+            <button 
+              onClick={handleCallDriver}
+              className="flex items-center text-primary hover:underline"
+            >
+              <Phone className="h-3 w-3 mr-1" />
+              {driver.phone}
+            </button>
+          ) : (
+            "-"
+          )}
         </td>
       )}
       

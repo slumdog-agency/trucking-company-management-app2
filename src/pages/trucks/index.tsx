@@ -561,7 +561,7 @@ export default function TrucksPage() {
                   onClick={() => removeFilter(index)}
                   className="text-muted-foreground hover:text-foreground"
                 >
-                  <Search className="h-3 w-3" />
+                  <X className="h-3 w-3" />
                 </button>
               </div>
             ))}

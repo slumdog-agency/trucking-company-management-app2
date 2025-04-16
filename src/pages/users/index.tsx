@@ -127,16 +127,20 @@ export default function UsersPage() {
           group: "Dispatch"
         };
         
-        // Simulate some additional users
-        const demoUsers = [
-          currentUser,
-          {
-            id: "2",
-            name: "Demo Dispatcher",
-            email: "dispatcher@example.com",
-            createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-            group: "Dispatch"
-          },
+        // Fetch dispatchers to use as users
+        const dispatchers = await fine.table("dispatchers").select();
+        
+        // Create users from dispatchers
+        const dispatcherUsers = dispatchers ? dispatchers.map((dispatcher, index) => ({
+          id: `d-${dispatcher.id || index + 10}`,
+          name: `${dispatcher.firstName} ${dispatcher.lastName}`,
+          email: dispatcher.email || `dispatcher${index + 1}@example.com`,
+          createdAt: dispatcher.createdAt || new Date(Date.now() - (index + 1) * 7 * 24 * 60 * 60 * 1000).toISOString(),
+          group: "Dispatch"
+        })) : [];
+        
+        // Simulate some additional users from other groups
+        const otherUsers = [
           {
             id: "3",
             name: "Demo Driver Manager",
@@ -160,12 +164,13 @@ export default function UsersPage() {
           }
         ];
         
-        setUsers(demoUsers);
+        const allUsers = [currentUser, ...dispatcherUsers, ...otherUsers];
+        setUsers(allUsers);
         
         // Fetch permissions for all users
         const allPermissions: Record<string, UserPermission[]> = {};
         
-        for (const user of demoUsers) {
+        for (const user of allUsers) {
           const userPerms = await fine.table("userPermissions").select().eq("userId", user.id);
           
           if (userPerms && userPerms.length > 0) {
@@ -670,7 +675,7 @@ export default function UsersPage() {
                   onClick={() => removeFilter(index)}
                   className="text-muted-foreground hover:text-foreground"
                 >
-                  <Search className="h-3 w-3" />
+                  <X className="h-3 w-3" />
                 </button>
               </div>
             ))}
