@@ -732,7 +732,7 @@ export default function TrailersPage() {
       
       <footer className="border-t py-4 bg-muted/30">
         <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          &copy; {new Date().getFullYear()} Trucking Manager. All rights reserved.
+          &copy; {new Date().getFullYear()} CarrierXXL. All rights reserved.
         </div>
       </footer>
     </div>

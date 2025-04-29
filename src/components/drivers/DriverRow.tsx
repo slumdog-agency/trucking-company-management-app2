@@ -17,22 +17,18 @@ import { Link } from "react-router-dom";
 
 interface DriverRowProps {
   driver: Schema["drivers"];
-  weekDays: Array<{
-    date: Date;
-    dayName: string;
-    dayNumber: string;
-    fullDate: string;
-    isToday: boolean;
-  }>;
+  weekDays: { fullDate: string; dayName: string; dayNumber: string; isToday: boolean }[];
   routes: Schema["routes"][];
   trucks: Schema["trucks"][];
   trailers: Schema["trailers"][];
   onUpdateDriver: (id: number, data: Partial<Schema["drivers"]>) => Promise<void>;
   onDeleteDriver: (id: number) => Promise<void>;
-  onAddRoute: (route: Schema["routes"]) => Promise<void>;
-  onUpdateRoute: (id: number, route: Schema["routes"]) => Promise<void>;
+  onAddRoute: (data: Partial<Schema["routes"]>) => Promise<void>;
+  onUpdateRoute: (id: number, data: Partial<Schema["routes"]>) => Promise<void>;
+  onDeleteRoute: (id: number) => Promise<void>;
   activeFilters: string[];
-  onViewProfile: (driverId: number) => void;
+  onViewProfile: (id: number) => void;
+  showWeeklyTotals: boolean;
 }
 
 export function DriverRow({ 
@@ -45,8 +41,10 @@ export function DriverRow({
   onDeleteDriver,
   onAddRoute,
   onUpdateRoute,
+  onDeleteRoute,
   activeFilters,
-  onViewProfile
+  onViewProfile,
+  showWeeklyTotals
 }: DriverRowProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedDriver, setEditedDriver] = useState<Schema["drivers"]>(driver);
@@ -217,30 +215,35 @@ export function DriverRow({
               routes={dayRoutes}
               onAddRoute={onAddRoute}
               onUpdateRoute={onUpdateRoute}
+              onDeleteRoute={onDeleteRoute}
             />
           </td>
         );
       })}
 
-      {/* Weekly total gross */}
-      <td className="p-2 font-medium text-right border-l border-border">
-        {formatCurrency(weeklyTotalGross)}
-      </td>
+      {showWeeklyTotals && (
+        <>
+          {/* Weekly total gross */}
+          <td className="p-2 font-medium text-right border-l border-border">
+            {formatCurrency(weeklyTotalGross)}
+          </td>
 
-      {/* Gross difference */}
-      <td className="p-2 font-medium text-right border-l border-border">
-        {formatCurrency(grossDifference)}
-      </td>
+          {/* Gross difference */}
+          <td className="p-2 font-medium text-right border-l border-border">
+            {formatCurrency(grossDifference)}
+          </td>
 
-      {/* Percentage income */}
-      <td className="p-2 font-medium text-right border-l border-border">
-        {formatCurrency(percentageIncome)}
-      </td>
-      
-      {/* Total earnings */}
-      <td className="p-2 font-medium text-right border-l border-border">
-        {formatCurrency(totalEarnings)}
-      </td>
+          {/* Percentage income */}
+          <td className="p-2 font-medium text-right border-l border-border">
+            {formatCurrency(percentageIncome)}
+          </td>
+          
+          {/* Total earnings */}
+          <td className="p-2 font-medium text-right border-l border-border">
+            {formatCurrency(totalEarnings)}
+          </td>
+        </>
+      )}
 
       {/* Actions */}
       <td className="p-2 text-right">

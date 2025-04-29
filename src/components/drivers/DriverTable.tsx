@@ -3,7 +3,7 @@ import { Schema } from "@/lib/db-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DriverRow } from "./DriverRow";
-import { getWeekDays, formatCurrency } from "@/lib/utils";
+import { getWeekDays, formatCurrency, getAppSettings } from "@/lib/utils";
 import { fine } from "@/lib/fine";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -50,9 +50,13 @@ export function DriverTable({ currentDate }: DriverTableProps) {
   const [filters, setFilters] = useState<FilterType[]>([]);
   const [filterInput, setFilterInput] = useState("");
   const [filterField, setFilterField] = useState("firstName");
-  // Update to match exactly the columns specified in requirements
   const [activeFilters, setActiveFilters] = useState<string[]>([
-    "count", "percentage", "firstName", "lastName", "phone", "dispatcher"
+    'count',
+    'percentage',
+    'firstName',
+    'lastName',
+    'phone',
+    'dispatcher'
   ]);
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   const { toast } = useToast();
@@ -60,6 +64,12 @@ export function DriverTable({ currentDate }: DriverTableProps) {
   const weekDays = getWeekDays(currentDate);
   const { data: session } = fine.auth.useSession();
   const tableRef = useRef<HTMLTableElement>(null);
+  const [showWeeklyTotals, setShowWeeklyTotals] = useState(true);
+
+  useEffect(() => {
+    const settings = getAppSettings();
+    setShowWeeklyTotals(settings.showWeeklyTotals);
+  }, []);
 
   // Fetch drivers and routes for the current week
   useEffect(() => {
@@ -70,7 +80,7 @@ export function DriverTable({ currentDate }: DriverTableProps) {
         const startDate = weekDays[0].fullDate;
         const endDate = weekDays[6].fullDate;
         
-        // Fetch drivers
+        // Fetch drivers with their assigned equipment
         const driversData = await fine.table("drivers").select();
         
         // Sort drivers by count and ensure sequential counts
@@ -78,7 +88,7 @@ export function DriverTable({ currentDate }: DriverTableProps) {
         
         setDrivers(sortedDrivers);
         
-        // Fetch trucks and trailers
+        // Fetch trucks and trailers for assignment
         const trucksData = await fine.table("trucks").select();
         setTrucks(trucksData || []);
         
@@ -247,6 +257,27 @@ export function DriverTable({ currentDate }: DriverTableProps) {
       toast({
         title: "Error",
         description: "Failed to delete driver. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const deleteRoute = async (id: number) => {
+    try {
+      await fine.table("routes").delete().eq("id", id);
+      
+      // Update routes state
+      setRoutes(prev => prev.filter(route => route.id !== id));
+      
+      toast({
+        title: "Success",
+        description: "Route deleted successfully.",
+      });
+    } catch (error) {
+      console.error("Error deleting route:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete route. Please try again.",
         variant: "destructive",
       });
     }
@@ -643,10 +674,14 @@ export function DriverTable({ currentDate }: DriverTableProps) {
                 </th>
               ))}
               
+              {showWeeklyTotals && (
+                <>
               <th className="p-2 text-right font-medium text-muted-foreground border-l border-border w-24">Total Gross</th>
               <th className="p-2 text-right font-medium text-muted-foreground border-l border-border w-24">Gross Difference</th>
               <th className="p-2 text-right font-medium text-muted-foreground border-l border-border w-24">Percentage Income</th>
               <th className="p-2 text-right font-medium text-muted-foreground border-l border-border w-24">Total Earnings</th>
+                </>
+              )}
               <th className="p-2 text-right font-medium text-muted-foreground w-20">Actions</th>
             </tr>
           </thead>
@@ -663,43 +698,74 @@ export function DriverTable({ currentDate }: DriverTableProps) {
                 onDeleteDriver={deleteDriver}
                 onAddRoute={addRoute}
                 onUpdateRoute={updateRoute}
+                onDeleteRoute={deleteRoute}
                 activeFilters={activeFilters}
                 onViewProfile={handleViewDriverProfile}
+                showWeeklyTotals={showWeeklyTotals}
               />
             ))}
           </tbody>
+          {showWeeklyTotals && (
           <tfoot>
             <tr className="bg-muted/50">
-              <td colSpan={activeFilters.length} className="p-2 font-medium">
-                Total Drivers: {filteredDrivers.length}
+                {/* Individual cells for each filter column */}
+                {activeFilters.includes('count') && (
+                  <td className="p-2 font-medium">
+                    Total: {filteredDrivers.length}
               </td>
-              <td colSpan={weekDays.length} className="p-2"></td>
+                )}
+                {activeFilters.includes('percentage') && (
+                  <td className="p-2"></td>
+                )}
+                {(activeFilters.includes('firstName') || activeFilters.includes('lastName')) && (
+                  <td className="p-2"></td>
+                )}
+                {activeFilters.includes('phone') && (
+                  <td className="p-2"></td>
+                )}
+                {activeFilters.includes('dispatcher') && (
+                  <td className="p-2"></td>
+                )}
+                
+                {/* Individual cells for each day of the week */}
+                {weekDays.map((day) => (
+                  <td key={day.fullDate} className="p-2 text-right font-medium border-l border-border"></td>
+                ))}
+                
+                {/* Total Gross */}
               <td className="p-2 text-right font-medium border-l border-border">
                 {formatCurrency(routes.reduce((total, route) => total + route.rate, 0))}
               </td>
+                
+                {/* Gross Difference */}
               <td className="p-2 text-right font-medium border-l border-border">
                 {formatCurrency(routes.reduce((total, route) => 
                   total + (route.soldFor ? route.rate - route.soldFor : 0), 0))}
               </td>
+                
+                {/* Percentage Income */}
               <td className="p-2 text-right font-medium border-l border-border">
                 {formatCurrency(routes.reduce((total, route) => {
-                  if (!route.soldFor) return total;
                   const driver = drivers.find(d => d.id === route.driverId);
-                  return total + (driver ? route.soldFor * (driver.percentage / 100) : 0);
+                    return total + (route.soldFor && driver ? route.soldFor * (driver.percentage / 100) : 0);
                 }, 0))}
               </td>
+                
+                {/* Total Earnings */}
               <td className="p-2 text-right font-medium border-l border-border">
                 {formatCurrency(routes.reduce((total, route) => {
-                  if (!route.soldFor) return total;
                   const driver = drivers.find(d => d.id === route.driverId);
-                  const grossDiff = route.rate - route.soldFor;
-                  const percentIncome = driver ? route.soldFor * (driver.percentage / 100) : 0;
+                    const grossDiff = route.soldFor ? route.rate - route.soldFor : 0;
+                    const percentIncome = route.soldFor && driver ? route.soldFor * (driver.percentage / 100) : 0;
                   return total + grossDiff + percentIncome;
                 }, 0))}
               </td>
+                
+                {/* Empty cell for actions column */}
               <td className="p-2"></td>
             </tr>
           </tfoot>
+          )}
         </table>
       </div>
     </div>

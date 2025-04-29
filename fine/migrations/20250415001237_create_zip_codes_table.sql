@@ -5,6 +5,8 @@ CREATE TABLE zipCodes (
   city TEXT NOT NULL,
   state TEXT NOT NULL,
   county TEXT,
+  latitude DECIMAL(10,6),
+  longitude DECIMAL(10,6),
   createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

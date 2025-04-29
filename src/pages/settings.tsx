@@ -7,10 +7,41 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Save, Upload, FileText, Settings2 } from "lucide-react";
+import { Save, Upload, FileText, Settings2, Plus, Search, Edit2, Trash2, ArrowUp, ArrowDown } from "lucide-react";
 import { fine } from "@/lib/fine";
-import { saveAppSettings, getAppSettings } from "@/lib/utils";
+import { saveAppSettings, getAppSettings, clearTables } from "@/lib/utils";
 import { Link } from "react-router-dom";
+import { Separator } from "@/components/ui/separator";
+import { Schema } from "@/lib/db-types";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { 
+  getDivisions, 
+  addDivision, 
+  updateDivision, 
+  deleteDivision,
+  getDispatchers,
+  addDispatcher,
+  updateDispatcher,
+  deleteDispatcher,
+  getRouteStatuses,
+  addRouteStatus,
+  updateRouteStatus,
+  deleteRouteStatus
+} from "@/lib/api";
 
 export default function SettingsPage() {
   const { toast } = useToast();
@@ -25,10 +56,52 @@ export default function SettingsPage() {
     showWeeklyTotals: true,
     enableNotifications: true
   });
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
+  
+  // Divisions state
+  const [divisions, setDivisions] = useState<Schema["divisions"][]>([]);
+  const [divisionSearchTerm, setDivisionSearchTerm] = useState("");
+  const [isDivisionDialogOpen, setIsDivisionDialogOpen] = useState(false);
+  const [editingDivision, setEditingDivision] = useState<Schema["divisions"] | null>(null);
+  const [divisionFormData, setDivisionFormData] = useState<Schema["divisions"]>({
+    name: "",
+    description: "",
+    mc: "",
+    dot: "",
+    address: "",
+    phone_number: ""
+  });
 
-  // Load saved settings on component mount
+  // Dispatchers state
+  const [dispatchers, setDispatchers] = useState<Schema["dispatchers"][]>([]);
+  const [dispatcherSearchTerm, setDispatcherSearchTerm] = useState("");
+  const [isDispatcherDialogOpen, setIsDispatcherDialogOpen] = useState(false);
+  const [editingDispatcher, setEditingDispatcher] = useState<Schema["dispatchers"] | null>(null);
+  const [dispatcherFormData, setDispatcherFormData] = useState<Schema["dispatchers"]>({
+    first_name: "",
+    last_name: "",
+    email: "",
+    phone: ""
+  });
+
+  // Route Statuses state
+  const [routeStatuses, setRouteStatuses] = useState<Schema["route_statuses"][]>([]);
+  const [routeStatusSearchTerm, setRouteStatusSearchTerm] = useState("");
+  const [isRouteStatusDialogOpen, setIsRouteStatusDialogOpen] = useState(false);
+  const [editingRouteStatus, setEditingRouteStatus] = useState<Schema["route_statuses"] | null>(null);
+  const [routeStatusFormData, setRouteStatusFormData] = useState<Schema["route_statuses"]>({
+    name: "",
+    color: "#4169E1",
+    is_default: false,
+    sort_order: 0
+  });
+
+  const [loading, setLoading] = useState({
+    divisions: true,
+    dispatchers: true,
+    routeStatuses: true
+  });
+
+  // Load settings and data on mount
   useEffect(() => {
     const savedSettings = getAppSettings();
     setAppSettings(prev => ({
@@ -37,7 +110,70 @@ export default function SettingsPage() {
       showWeeklyTotals: savedSettings.showWeeklyTotals !== undefined ? savedSettings.showWeeklyTotals : true,
       enableNotifications: savedSettings.enableNotifications !== undefined ? savedSettings.enableNotifications : true
     }));
+
+    setCompanySettings(prev => ({
+      ...prev,
+      companyName: savedSettings.companyName || "My Trucking Company",
+      contactEmail: savedSettings.contactEmail || "contact@example.com",
+      contactPhone: savedSettings.contactPhone || "(555) 123-4567",
+      address: savedSettings.address || "123 Trucking Lane, Anytown, USA"
+    }));
+
+    fetchDivisions();
+    fetchDispatchers();
+    fetchRouteStatuses();
   }, []);
+
+  const fetchDivisions = async () => {
+    setLoading(prev => ({ ...prev, divisions: true }));
+    try {
+      const data = await getDivisions();
+      setDivisions(data || []);
+    } catch (error) {
+      console.error("Error fetching divisions:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load divisions. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(prev => ({ ...prev, divisions: false }));
+    }
+  };
+
+  const fetchDispatchers = async () => {
+    setLoading(prev => ({ ...prev, dispatchers: true }));
+    try {
+      const data = await getDispatchers();
+      setDispatchers(data || []);
+    } catch (error) {
+      console.error("Error fetching dispatchers:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load dispatchers. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(prev => ({ ...prev, dispatchers: false }));
+    }
+  };
+
+  const fetchRouteStatuses = async () => {
+    setLoading(prev => ({ ...prev, routeStatuses: true }));
+    try {
+      const data = await getRouteStatuses();
+      setRouteStatuses(data || []);
+    } catch (error) {
+      console.error("Error fetching route statuses:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load route statuses. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(prev => ({ ...prev, routeStatuses: false }));
+    }
+  };
 
   const handleCompanySettingsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -63,146 +199,377 @@ export default function SettingsPage() {
   };
 
   const handleSaveSettings = () => {
-    // Save app settings to localStorage
-    saveAppSettings(appSettings);
+    // Save both app settings and company settings to localStorage
+    saveAppSettings({
+      ...appSettings,
+      companyName: companySettings.companyName,
+      contactEmail: companySettings.contactEmail,
+      contactPhone: companySettings.contactPhone,
+      address: companySettings.address
+    });
     
-    // In a real app, you would save company settings to the database
+    // Dispatch event to notify components of settings change
+    window.dispatchEvent(new Event('app-settings-changed'));
+    
     toast({
       title: "Settings Saved",
       description: "Your settings have been saved successfully.",
     });
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Check if it's a CSV file
-    if (file.type !== "text/csv" && !file.name.endsWith('.csv')) {
+  const handleAddDivision = async () => {
+    if (!divisionFormData.name) {
       toast({
-        title: "Invalid File",
-        description: "Please upload a CSV file.",
+        title: "Validation Error",
+        description: "Division name is required.",
         variant: "destructive",
       });
       return;
     }
 
-    setIsUploading(true);
-    setUploadProgress(0);
-
     try {
-      // Read the file
-      const reader = new FileReader();
-      
-      reader.onload = async (event) => {
-        const csvData = event.target?.result as string;
-        const lines = csvData.split('\\n');
-        
-        // Skip header row
-        const header = lines[0].split(',');
-        
-        // Find column indices based on your specified format
-        const zipIndex = header.findIndex(col => col.toLowerCase().trim() === 'zip');
-        const cityIndex = header.findIndex(col => col.toLowerCase().trim() === 'city');
-        const stateIdIndex = header.findIndex(col => col.toLowerCase().trim() === 'state_id');
-        const stateNameIndex = header.findIndex(col => col.toLowerCase().trim() === 'state name');
-        const countyNameIndex = header.findIndex(col => col.toLowerCase().trim() === 'county_name');
-        
-        if (zipIndex === -1 || cityIndex === -1 || (stateIdIndex === -1 && stateNameIndex === -1)) {
-          toast({
-            title: "Invalid CSV Format",
-            description: "CSV must contain columns for Zip, City, and State (either state_id or state name).",
-            variant: "destructive",
-          });
-          setIsUploading(false);
-          return;
-        }
-        
-        // Process data in batches
-        const batchSize = 100;
-        const totalRows = lines.length - 1; // Exclude header
-        
-        for (let i = 1; i < lines.length; i += batchSize) {
-          const batch = [];
-          
-          for (let j = i; j < Math.min(i + batchSize, lines.length); j++) {
-            const line = lines[j].trim();
-            if (!line) continue;
-            
-            // Handle quoted CSV values properly
-            let columns: string[] = [];
-            let inQuotes = false;
-            let currentValue = '';
-            
-            for (let k = 0; k < line.length; k++) {
-              const char = line[k];
-              
-              if (char === '"' && (k === 0 || line[k-1] !== '\\')) {
-                inQuotes = !inQuotes;
-              } else if (char === ',' && !inQuotes) {
-                columns.push(currentValue);
-                currentValue = '';
-              } else {
-                currentValue += char;
-              }
-            }
-            
-            // Add the last value
-            columns.push(currentValue);
-            
-            // Clean up values (remove quotes)
-            columns = columns.map(col => col.replace(/^"|"$/g, '').trim());
-            
-            const zipCode = columns[zipIndex];
-            const city = columns[cityIndex];
-            const state = stateNameIndex !== -1 ? columns[stateNameIndex] : columns[stateIdIndex]; // Use state name if available, otherwise use state ID
-            const county = countyNameIndex !== -1 ? columns[countyNameIndex] : ''; // Optional
-            
-            if (zipCode && city && state) {
-              batch.push({
-                zipCode,
-                city,
-                state,
-                county
-              });
-            }
-          }
-          
-          if (batch.length > 0) {
-            // Insert batch into database
-            await fine.table("zipCodes").insert(batch);
-          }
-          
-          // Update progress
-          const progress = Math.min(100, Math.round(((i + batchSize) / totalRows) * 100));
-          setUploadProgress(progress);
-        }
-        
-        toast({
-          title: "Upload Complete",
-          description: "Zip code data has been successfully imported.",
-        });
-        setIsUploading(false);
-      };
-      
-      reader.onerror = () => {
-        toast({
-          title: "Error",
-          description: "Failed to read the file. Please try again.",
-          variant: "destructive",
-        });
-        setIsUploading(false);
-      };
-      
-      reader.readAsText(file);
+      await addDivision(divisionFormData);
+      await fetchDivisions();
+      setDivisionFormData({
+        name: "",
+        description: "",
+        mc: "",
+        dot: "",
+        address: "",
+        phone_number: ""
+      });
+      setIsDivisionDialogOpen(false);
+      toast({
+        title: "Success",
+        description: "Division added successfully.",
+      });
     } catch (error) {
-      console.error("Error uploading zip codes:", error);
+      console.error("Error adding division:", error);
       toast({
         title: "Error",
-        description: "Failed to upload zip codes. Please try again.",
+        description: "Failed to add division. Please try again.",
         variant: "destructive",
       });
-      setIsUploading(false);
+    }
+  };
+
+  const handleUpdateDivision = async () => {
+    if (!editingDivision || !editingDivision.id) return;
+    
+    if (!divisionFormData.name) {
+      toast({
+        title: "Validation Error",
+        description: "Division name is required.",
+        variant: "destructive",
+      });
+      return;
+    }
+        
+    try {
+      await updateDivision(editingDivision.id, divisionFormData);
+      await fetchDivisions();
+      setEditingDivision(null);
+      setIsDivisionDialogOpen(false);
+      toast({
+        title: "Success",
+        description: "Division updated successfully.",
+      });
+    } catch (error) {
+      console.error("Error updating division:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update division. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteDivision = async (id: number) => {
+    if (!confirm("Are you sure you want to delete this division?")) return;
+
+    try {
+      await deleteDivision(id);
+      await fetchDivisions();
+      toast({
+        title: "Success",
+        description: "Division deleted successfully.",
+      });
+    } catch (error) {
+      console.error("Error deleting division:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete division. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleEditDivision = (division: Schema["divisions"]) => {
+    setEditingDivision(division);
+    setDivisionFormData(division);
+    setIsDivisionDialogOpen(true);
+  };
+
+  const handleAddNewClick = () => {
+    setEditingDivision(null);
+    setDivisionFormData({
+      name: "",
+      description: "",
+      mc: "",
+      dot: "",
+      address: "",
+      phone_number: ""
+    });
+    setIsDivisionDialogOpen(true);
+  };
+
+  const filteredDivisions = divisions.filter(division => {
+    const searchString = `${division.name} ${division.mc || ''} ${division.dot || ''}`.toLowerCase();
+    return searchString.includes(divisionSearchTerm.toLowerCase());
+  });
+
+  const handleAddDispatcher = async () => {
+    if (!dispatcherFormData.first_name || !dispatcherFormData.last_name) {
+      toast({
+        title: "Validation Error",
+        description: "First name and last name are required.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await addDispatcher(dispatcherFormData);
+      await fetchDispatchers();
+      setDispatcherFormData({
+        first_name: "",
+        last_name: "",
+        email: "",
+        phone: ""
+      });
+      setIsDispatcherDialogOpen(false);
+      toast({
+        title: "Success",
+        description: "Dispatcher added successfully.",
+      });
+    } catch (error) {
+      console.error("Error adding dispatcher:", error);
+      toast({
+        title: "Error",
+        description: "Failed to add dispatcher. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleUpdateDispatcher = async () => {
+    if (!editingDispatcher || !editingDispatcher.id) return;
+    
+    if (!dispatcherFormData.first_name || !dispatcherFormData.last_name) {
+      toast({
+        title: "Validation Error",
+        description: "First name and last name are required.",
+        variant: "destructive",
+      });
+      return;
+    }
+        
+    try {
+      await updateDispatcher(editingDispatcher.id, dispatcherFormData);
+      await fetchDispatchers();
+      setEditingDispatcher(null);
+      setIsDispatcherDialogOpen(false);
+      toast({
+        title: "Success",
+        description: "Dispatcher updated successfully.",
+      });
+    } catch (error) {
+      console.error("Error updating dispatcher:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update dispatcher. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteDispatcher = async (id: number) => {
+    if (!confirm("Are you sure you want to delete this dispatcher?")) return;
+
+    try {
+      await deleteDispatcher(id);
+      await fetchDispatchers();
+      toast({
+        title: "Success",
+        description: "Dispatcher deleted successfully.",
+      });
+    } catch (error) {
+      console.error("Error deleting dispatcher:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete dispatcher. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleEditDispatcher = (dispatcher: Schema["dispatchers"]) => {
+    setEditingDispatcher(dispatcher);
+    setDispatcherFormData(dispatcher);
+    setIsDispatcherDialogOpen(true);
+  };
+
+  const handleAddRouteStatus = async () => {
+    if (!routeStatusFormData.name) {
+      toast({
+        title: "Validation Error",
+        description: "Status name is required.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Set the sort order to be the highest + 1
+      const maxSortOrder = routeStatuses.reduce((max, status) => 
+        Math.max(max, status.sort_order || 0), 0);
+      
+      const newStatus = {
+        ...routeStatusFormData,
+        sort_order: maxSortOrder + 1
+      };
+      
+      await addRouteStatus(newStatus);
+      await fetchRouteStatuses();
+      setRouteStatusFormData({
+        name: "",
+        color: "#4169E1",
+        is_default: false,
+        sort_order: 0
+      });
+      setIsRouteStatusDialogOpen(false);
+      toast({
+        title: "Success",
+        description: "Route status added successfully.",
+      });
+    } catch (error) {
+      console.error("Error adding route status:", error);
+      toast({
+        title: "Error",
+        description: "Failed to add route status. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleUpdateRouteStatus = async () => {
+    if (!editingRouteStatus || !editingRouteStatus.id) return;
+    
+    if (!routeStatusFormData.name) {
+      toast({
+        title: "Validation Error",
+        description: "Status name is required.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await updateRouteStatus(editingRouteStatus.id, routeStatusFormData);
+      await fetchRouteStatuses();
+      setEditingRouteStatus(null);
+      setIsRouteStatusDialogOpen(false);
+      toast({
+        title: "Success",
+        description: "Route status updated successfully.",
+      });
+    } catch (error) {
+      console.error("Error updating route status:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update route status. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteRouteStatus = async (id: number) => {
+    if (!confirm("Are you sure you want to delete this route status? This may affect existing routes.")) return;
+
+    try {
+      await deleteRouteStatus(id);
+      await fetchRouteStatuses();
+      toast({
+        title: "Success",
+        description: "Route status deleted successfully.",
+      });
+    } catch (error) {
+      console.error("Error deleting route status:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete route status. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleEditRouteStatus = (status: Schema["route_statuses"]) => {
+    setEditingRouteStatus(status);
+    setRouteStatusFormData(status);
+    setIsRouteStatusDialogOpen(true);
+  };
+
+  const handleMoveRouteStatusUp = async (index: number) => {
+    if (index <= 0) return;
+    
+    try {
+      const currentStatus = routeStatuses[index];
+      const previousStatus = routeStatuses[index - 1];
+      
+      // Swap sort orders
+      const tempOrder = currentStatus.sort_order;
+      await updateRouteStatus(currentStatus.id!, { sort_order: previousStatus.sort_order });
+      await updateRouteStatus(previousStatus.id!, { sort_order: tempOrder });
+      
+      await fetchRouteStatuses();
+      toast({
+        title: "Success",
+        description: "Route status order updated.",
+      });
+    } catch (error) {
+      console.error("Error updating status order:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update status order. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleMoveRouteStatusDown = async (index: number) => {
+    if (index >= routeStatuses.length - 1) return;
+    
+    try {
+      const currentStatus = routeStatuses[index];
+      const nextStatus = routeStatuses[index + 1];
+      
+      // Swap sort orders
+      const tempOrder = currentStatus.sort_order;
+      await updateRouteStatus(currentStatus.id!, { sort_order: nextStatus.sort_order });
+      await updateRouteStatus(nextStatus.id!, { sort_order: tempOrder });
+      
+      await fetchRouteStatuses();
+      toast({
+        title: "Success",
+        description: "Route status order updated.",
+      });
+    } catch (error) {
+      console.error("Error updating status order:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update status order. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -215,29 +582,31 @@ export default function SettingsPage() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
             <p className="text-muted-foreground mt-2">
-              Configure your application preferences
+              Manage your company settings and preferences
             </p>
           </div>
           <Button asChild>
-            <a href="/">
+            <Link to="/">
               Back to Dashboard
-            </a>
+            </Link>
           </Button>
         </div>
-        
-        <Tabs defaultValue="company" className="w-full">
-          <TabsList className="mb-4">
+
+        <Tabs defaultValue="company">
+          <TabsList>
             <TabsTrigger value="company">Company</TabsTrigger>
-            <TabsTrigger value="application">Application</TabsTrigger>
-            <TabsTrigger value="data">Data Import</TabsTrigger>
+            <TabsTrigger value="divisions">Divisions</TabsTrigger>
+            <TabsTrigger value="dispatchers">Dispatchers</TabsTrigger>
+            <TabsTrigger value="route-statuses">Route Statuses</TabsTrigger>
+            <TabsTrigger value="app">App Settings</TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value="company">
             <Card>
               <CardHeader>
                 <CardTitle>Company Information</CardTitle>
                 <CardDescription>
-                  Update your company details that will appear on reports and documents
+                  Update your company details and contact information
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -250,7 +619,6 @@ export default function SettingsPage() {
                     onChange={handleCompanySettingsChange}
                   />
                 </div>
-                
                 <div className="space-y-2">
                   <Label htmlFor="contactEmail">Contact Email</Label>
                   <Input
@@ -261,7 +629,6 @@ export default function SettingsPage() {
                     onChange={handleCompanySettingsChange}
                   />
                 </div>
-                
                 <div className="space-y-2">
                   <Label htmlFor="contactPhone">Contact Phone</Label>
                   <Input
@@ -271,7 +638,6 @@ export default function SettingsPage() {
                     onChange={handleCompanySettingsChange}
                   />
                 </div>
-                
                 <div className="space-y-2">
                   <Label htmlFor="address">Address</Label>
                   <Input
@@ -281,177 +647,537 @@ export default function SettingsPage() {
                     onChange={handleCompanySettingsChange}
                   />
                 </div>
-                
-                <Button onClick={handleSaveSettings} className="mt-4">
+                <Button onClick={handleSaveSettings}>
                   <Save className="h-4 w-4 mr-2" />
-                  Save Company Settings
+                  Save Changes
                 </Button>
               </CardContent>
             </Card>
           </TabsContent>
-          
-          <TabsContent value="application">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Application Settings</CardTitle>
-                  <CardDescription>
-                    Customize how the application works for your needs
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="defaultDriverPercentage">Default Driver Percentage</Label>
-                    <Input
-                      id="defaultDriverPercentage"
-                      name="defaultDriverPercentage"
-                      type="number"
-                      value={appSettings.defaultDriverPercentage}
-                      onChange={handleAppSettingsChange}
-                    />
-                    <p className="text-sm text-muted-foreground">
-                      The default percentage used when adding new drivers
-                    </p>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="showWeeklyTotals">Show Weekly Totals</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Display weekly earnings totals on the dashboard
-                      </p>
-                    </div>
-                    <Switch
-                      id="showWeeklyTotals"
-                      checked={appSettings.showWeeklyTotals}
-                      onCheckedChange={(checked) => handleSwitchChange('showWeeklyTotals', checked)}
-                    />
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="enableNotifications">Enable Notifications</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Receive notifications for important events
-                      </p>
-                    </div>
-                    <Switch
-                      id="enableNotifications"
-                      checked={appSettings.enableNotifications}
-                      onCheckedChange={(checked) => handleSwitchChange('enableNotifications', checked)}
-                    />
-                  </div>
-                  
-                  <Button onClick={handleSaveSettings} className="mt-4">
-                    <Save className="h-4 w-4 mr-2" />
-                    Save Application Settings
-                  </Button>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader>
-                  <CardTitle>Advanced Settings</CardTitle>
-                  <CardDescription>
-                    Configure advanced application settings
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="text-lg font-medium">Route Statuses</h3>
-                        <p className="text-sm text-muted-foreground">
-                          Manage route status options and colors
-                        </p>
-                      </div>
-                      <Button asChild>
-                        <Link to="/settings/route-statuses">
-                          <Settings2 className="h-4 w-4 mr-2" />
-                          Manage
-                        </Link>
-                      </Button>
-                    </div>
-                    
-                    <div className="border-t pt-4">
-                      <h3 className="text-lg font-medium">User Permissions</h3>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        Manage user access and permissions
-                      </p>
-                      <Button asChild>
-                        <Link to="/users">
-                          <Settings2 className="h-4 w-4 mr-2" />
-                          Manage Users
-                        </Link>
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-          
-          <TabsContent value="data">
+
+          <TabsContent value="divisions">
             <Card>
               <CardHeader>
-                <CardTitle>Import ZIP Code Data</CardTitle>
+                <CardTitle>Divisions Management</CardTitle>
                 <CardDescription>
-                  Upload a CSV file containing ZIP codes, cities, states, and counties
+                  Manage your company's divisions and their information
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center">
-                    <FileText className="h-10 w-10 mx-auto mb-4 text-muted-foreground" />
-                    <h3 className="text-lg font-medium mb-2">Upload ZIP Code CSV</h3>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      CSV file should contain columns for Zip, City, State Name, and County Name
-                    </p>
-                    
-                    <div className="flex justify-center">
-                      <Label 
-                        htmlFor="zipCodeFile" 
-                        className="cursor-pointer inline-flex items-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md"
-                      >
-                        <Upload className="h-4 w-4" />
-                        Select CSV File
-                      </Label>
-                      <Input 
-                        id="zipCodeFile" 
-                        type="file" 
-                        accept=".csv" 
-                        className="hidden" 
-                        onChange={handleFileUpload}
-                        disabled={isUploading}
-                      />
-                    </div>
+              <CardContent>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="relative max-w-sm">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search divisions..."
+                      className="pl-8"
+                      value={divisionSearchTerm}
+                      onChange={(e) => setDivisionSearchTerm(e.target.value)}
+                    />
                   </div>
-                  
-                  {isUploading && (
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span>Uploading...</span>
-                        <span>{uploadProgress}%</span>
+                  <Dialog open={isDivisionDialogOpen} onOpenChange={setIsDivisionDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button onClick={() => {
+                        setEditingDivision(null);
+                        setDivisionFormData({
+                          name: "",
+                          description: "",
+                          mc: "",
+                          dot: "",
+                          address: "",
+                          phone_number: ""
+                        });
+                      }}>
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add Division
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>
+                          {editingDivision ? "Edit Division" : "Add New Division"}
+                        </DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="name">Division Name</Label>
+                          <Input
+                            id="name"
+                            value={divisionFormData.name}
+                            onChange={(e) => setDivisionFormData(prev => ({ ...prev, name: e.target.value }))}
+                            placeholder="Enter division name"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="description">Description</Label>
+                          <Input
+                            id="description"
+                            value={divisionFormData.description}
+                            onChange={(e) => setDivisionFormData(prev => ({ ...prev, description: e.target.value }))}
+                            placeholder="Enter division description"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="mc">MC Number</Label>
+                            <Input
+                              id="mc"
+                              value={divisionFormData.mc}
+                              onChange={(e) => setDivisionFormData(prev => ({ ...prev, mc: e.target.value }))}
+                              placeholder="MC-XXXXXX"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="dot">DOT Number</Label>
+                            <Input
+                              id="dot"
+                              value={divisionFormData.dot}
+                              onChange={(e) => setDivisionFormData(prev => ({ ...prev, dot: e.target.value }))}
+                              placeholder="XXXXXXX"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="address">Address</Label>
+                          <Input
+                            id="address"
+                            value={divisionFormData.address}
+                            onChange={(e) => setDivisionFormData(prev => ({ ...prev, address: e.target.value }))}
+                            placeholder="Enter address"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="phone_number">Phone Number</Label>
+                          <Input
+                            id="phone_number"
+                            value={divisionFormData.phone_number}
+                            onChange={(e) => setDivisionFormData(prev => ({ ...prev, phone_number: e.target.value }))}
+                            placeholder="(XXX) XXX-XXXX"
+                          />
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <Button variant="outline" onClick={() => setIsDivisionDialogOpen(false)}>
+                            Cancel
+                          </Button>
+                          <Button onClick={editingDivision ? handleUpdateDivision : handleAddDivision}>
+                            {editingDivision ? "Update Division" : "Add Division"}
+                          </Button>
+                        </div>
                       </div>
-                      <div className="h-2 bg-muted rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-primary" 
-                          style={{ width: `${uploadProgress}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  )}
-                  
-                  <div className="bg-muted/50 rounded-lg p-4">
-                    <h4 className="font-medium mb-2">CSV Format Example</h4>
-                    <pre className="text-xs overflow-x-auto p-2 bg-background rounded">
-                      Zip,City,state_id,State Name,county_name<br/>
-                      10001,New York,NY,New York,New York County<br/>
-                      90210,Beverly Hills,CA,California,Los Angeles County<br/>
-                      60601,Chicago,IL,Illinois,Cook County
-                    </pre>
-                  </div>
+                    </DialogContent>
+                  </Dialog>
                 </div>
+
+                {loading.divisions ? (
+                  <div className="flex justify-center p-8">Loading division data...</div>
+                ) : (
+                  <div className="border rounded-lg">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Division Name</TableHead>
+                          <TableHead>Description</TableHead>
+                          <TableHead>MC Number</TableHead>
+                          <TableHead>DOT Number</TableHead>
+                          <TableHead>Address</TableHead>
+                          <TableHead>Phone Number</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {divisions.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={6} className="text-center py-8">
+                              No divisions found
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          divisions
+                            .filter(division => 
+                              division.name.toLowerCase().includes(divisionSearchTerm.toLowerCase()) ||
+                              (division.mc?.toLowerCase() || '').includes(divisionSearchTerm.toLowerCase()) ||
+                              (division.dot?.toLowerCase() || '').includes(divisionSearchTerm.toLowerCase())
+                            )
+                            .map((division) => (
+                              <TableRow key={division.id}>
+                                <TableCell className="font-medium">{division.name}</TableCell>
+                                <TableCell>{division.description || "-"}</TableCell>
+                                <TableCell>{division.mc || "-"}</TableCell>
+                                <TableCell>{division.dot || "-"}</TableCell>
+                                <TableCell>{division.address || "-"}</TableCell>
+                                <TableCell>{division.phone_number || "-"}</TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex justify-end gap-1">
+                                    <Button size="sm" variant="ghost" onClick={() => handleEditDivision(division)}>
+                                      <Edit2 className="h-4 w-4" />
+                                    </Button>
+                                    <Button size="sm" variant="ghost" onClick={() => handleDeleteDivision(division.id!)}>
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="dispatchers">
+            <Card>
+              <CardHeader>
+                <CardTitle>Dispatchers Management</CardTitle>
+                <CardDescription>
+                  Manage your company's dispatchers and their information
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="relative max-w-sm">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search dispatchers..."
+                      className="pl-8"
+                      value={dispatcherSearchTerm}
+                      onChange={(e) => setDispatcherSearchTerm(e.target.value)}
+                    />
+                  </div>
+                  <Dialog open={isDispatcherDialogOpen} onOpenChange={setIsDispatcherDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button onClick={() => {
+                        setEditingDispatcher(null);
+                        setDispatcherFormData({
+                          first_name: "",
+                          last_name: "",
+                          email: "",
+                          phone: ""
+                        });
+                      }}>
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add Dispatcher
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>
+                          {editingDispatcher ? "Edit Dispatcher" : "Add New Dispatcher"}
+                        </DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="first_name">First Name</Label>
+                            <Input
+                              id="first_name"
+                              value={dispatcherFormData.first_name}
+                              onChange={(e) => setDispatcherFormData(prev => ({ ...prev, first_name: e.target.value }))}
+                              placeholder="John"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="last_name">Last Name</Label>
+                            <Input
+                              id="last_name"
+                              value={dispatcherFormData.last_name}
+                              onChange={(e) => setDispatcherFormData(prev => ({ ...prev, last_name: e.target.value }))}
+                              placeholder="Doe"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="email">Email</Label>
+                          <Input
+                            id="email"
+                            type="email"
+                            value={dispatcherFormData.email}
+                            onChange={(e) => setDispatcherFormData(prev => ({ ...prev, email: e.target.value }))}
+                            placeholder="john.doe@example.com"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="phone">Phone</Label>
+                          <Input
+                            id="phone"
+                            value={dispatcherFormData.phone}
+                            onChange={(e) => setDispatcherFormData(prev => ({ ...prev, phone: e.target.value }))}
+                            placeholder="(XXX) XXX-XXXX"
+                          />
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <Button variant="outline" onClick={() => setIsDispatcherDialogOpen(false)}>
+                            Cancel
+                          </Button>
+                          <Button onClick={editingDispatcher ? handleUpdateDispatcher : handleAddDispatcher}>
+                            {editingDispatcher ? "Update Dispatcher" : "Add Dispatcher"}
+                          </Button>
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+
+                {loading.dispatchers ? (
+                  <div className="flex justify-center p-8">Loading dispatcher data...</div>
+                ) : (
+                  <div className="border rounded-lg">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Phone</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {dispatchers.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={4} className="text-center py-8">
+                              No dispatchers found
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          dispatchers
+                            .filter(dispatcher => 
+                              `${dispatcher.first_name} ${dispatcher.last_name}`.toLowerCase().includes(dispatcherSearchTerm.toLowerCase()) ||
+                              (dispatcher.email?.toLowerCase() || '').includes(dispatcherSearchTerm.toLowerCase()) ||
+                              (dispatcher.phone?.toLowerCase() || '').includes(dispatcherSearchTerm.toLowerCase())
+                            )
+                            .map((dispatcher) => (
+                              <TableRow key={dispatcher.id}>
+                                <TableCell className="font-medium">{`${dispatcher.first_name} ${dispatcher.last_name}`}</TableCell>
+                                <TableCell>{dispatcher.email || "-"}</TableCell>
+                                <TableCell>{dispatcher.phone || "-"}</TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex justify-end gap-1">
+                                    <Button size="sm" variant="ghost" onClick={() => handleEditDispatcher(dispatcher)}>
+                                      <Edit2 className="h-4 w-4" />
+                                    </Button>
+                                    <Button size="sm" variant="ghost" onClick={() => handleDeleteDispatcher(dispatcher.id!)}>
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="route-statuses">
+            <Card>
+              <CardHeader>
+                <CardTitle>Route Statuses Management</CardTitle>
+                <CardDescription>
+                  Manage your route statuses and their colors
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="relative max-w-sm">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search route statuses..."
+                      className="pl-8"
+                      value={routeStatusSearchTerm}
+                      onChange={(e) => setRouteStatusSearchTerm(e.target.value)}
+                    />
+                  </div>
+                  <Dialog open={isRouteStatusDialogOpen} onOpenChange={setIsRouteStatusDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button onClick={() => {
+                        setEditingRouteStatus(null);
+                        setRouteStatusFormData({
+                          name: "",
+                          color: "#4169E1",
+                          is_default: false,
+                          sort_order: 0
+                        });
+                      }}>
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add Route Status
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>
+                          {editingRouteStatus ? "Edit Route Status" : "Add New Route Status"}
+                        </DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="name">Status Name</Label>
+                          <Input
+                            id="name"
+                            value={routeStatusFormData.name}
+                            onChange={(e) => setRouteStatusFormData(prev => ({ ...prev, name: e.target.value }))}
+                            placeholder="Enter status name"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="color">Color</Label>
+                          <Input
+                            id="color"
+                            type="color"
+                            value={routeStatusFormData.color}
+                            onChange={(e) => setRouteStatusFormData(prev => ({ ...prev, color: e.target.value }))}
+                          />
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Switch
+                            id="is_default"
+                            checked={routeStatusFormData.is_default}
+                            onCheckedChange={(checked) => setRouteStatusFormData(prev => ({ ...prev, is_default: checked }))}
+                          />
+                          <Label htmlFor="is_default">Set as Default Status</Label>
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <Button variant="outline" onClick={() => setIsRouteStatusDialogOpen(false)}>
+                            Cancel
+                          </Button>
+                          <Button onClick={editingRouteStatus ? handleUpdateRouteStatus : handleAddRouteStatus}>
+                            {editingRouteStatus ? "Update Status" : "Add Status"}
+                          </Button>
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+
+                {loading.routeStatuses ? (
+                  <div className="flex justify-center p-8">Loading route status data...</div>
+                ) : (
+                  <div className="border rounded-lg">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Status Name</TableHead>
+                          <TableHead>Color</TableHead>
+                          <TableHead>Default</TableHead>
+                          <TableHead>Order</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {routeStatuses.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={5} className="text-center py-8">
+                              No route statuses found
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          routeStatuses
+                            .filter(status => 
+                              status.name.toLowerCase().includes(routeStatusSearchTerm.toLowerCase())
+                            )
+                            .map((status, index) => (
+                              <TableRow key={status.id}>
+                                <TableCell className="font-medium">{status.name}</TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    <div 
+                                      className="w-6 h-6 rounded border"
+                                      style={{ backgroundColor: status.color }}
+                                    />
+                                    {status.color}
+                                  </div>
+                                </TableCell>
+                                <TableCell>{status.is_default ? "Yes" : "No"}</TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-1">
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => handleMoveRouteStatusUp(index)}
+                                      disabled={index === 0}
+                                    >
+                                      <ArrowUp className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => handleMoveRouteStatusDown(index)}
+                                      disabled={index === routeStatuses.length - 1}
+                                    >
+                                      <ArrowDown className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex justify-end gap-1">
+                                    <Button size="sm" variant="ghost" onClick={() => handleEditRouteStatus(status)}>
+                                      <Edit2 className="h-4 w-4" />
+                                    </Button>
+                                    <Button 
+                                      size="sm" 
+                                      variant="ghost" 
+                                      onClick={() => handleDeleteRouteStatus(status.id!)}
+                                      disabled={status.is_default}
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="app">
+            <Card>
+              <CardHeader>
+                <CardTitle>App Settings</CardTitle>
+                <CardDescription>
+                  Configure application preferences and defaults
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="defaultDriverPercentage">Default Driver Percentage</Label>
+                  <Input
+                    id="defaultDriverPercentage"
+                    name="defaultDriverPercentage"
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={appSettings.defaultDriverPercentage}
+                    onChange={handleAppSettingsChange}
+                  />
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="showWeeklyTotals"
+                    checked={appSettings.showWeeklyTotals}
+                    onCheckedChange={(checked) => handleSwitchChange("showWeeklyTotals", checked)}
+                  />
+                  <Label htmlFor="showWeeklyTotals">Show Weekly Totals</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="enableNotifications"
+                    checked={appSettings.enableNotifications}
+                    onCheckedChange={(checked) => handleSwitchChange("enableNotifications", checked)}
+                  />
+                  <Label htmlFor="enableNotifications">Enable Notifications</Label>
+                </div>
+                <Button onClick={handleSaveSettings}>
+                  <Save className="h-4 w-4 mr-2" />
+                  Save Changes
+                </Button>
               </CardContent>
             </Card>
           </TabsContent>
@@ -460,7 +1186,7 @@ export default function SettingsPage() {
       
       <footer className="border-t py-4 bg-muted/30">
         <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          &copy; {new Date().getFullYear()} Trucking Manager. All rights reserved.
+          &copy; {new Date().getFullYear()} CarrierXXL. All rights reserved.
         </div>
       </footer>
     </div>

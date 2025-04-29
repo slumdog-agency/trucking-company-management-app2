@@ -26,6 +26,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TableFooter,
 } from "@/components/ui/table";
 import { formatCurrency } from "@/lib/utils";
 
@@ -152,7 +153,7 @@ export default function DriverProfilePage() {
             <h2 className="text-2xl font-bold mb-4">Driver Not Found</h2>
             <p className="text-muted-foreground mb-6">The driver you're looking for doesn't exist or has been removed.</p>
             <Button asChild>
-              <Link to="/drivers">Back to Drivers</Link>
+              <Link to="/">Back to Dashboard</Link>
             </Button>
           </div>
         </main>
@@ -177,9 +178,9 @@ export default function DriverProfilePage() {
       <main className="flex-1 container mx-auto py-6 px-4">
         <div className="flex items-center mb-6">
           <Button variant="ghost" asChild className="mr-4">
-            <Link to="/drivers">
+            <Link to="/">
               <ArrowLeft className="h-4 w-4 mr-1" />
-              Back to Drivers
+              Back to Dashboard
             </Link>
           </Button>
           <div>
@@ -239,10 +240,10 @@ export default function DriverProfilePage() {
                     <div className="font-medium flex items-center justify-between">
                       <button 
                         onClick={handleEmailDriver}
-                        className="flex items-center text-primary hover:underline truncate max-w-[200px]"
+                        className="flex items-center text-primary hover:underline"
                       >
                         <Mail className="h-3 w-3 mr-1 flex-shrink-0" />
-                        <span className="truncate">{driver.email}</span>
+                        <span>{driver.email}</span>
                       </button>
                       <Button 
                         variant="ghost" 
@@ -287,16 +288,20 @@ export default function DriverProfilePage() {
                 
                 {driver.emergencyContactName && (
                   <div className="space-y-1">
-                    <div className="text-sm text-muted-foreground">Emergency Contact</div>
+                    <div className="text-sm text-muted-foreground">Emergency Contact Name</div>
                     <div className="font-medium">
                       {driver.emergencyContactName}
-                      {driver.emergencyContactPhone && (
-                        <div className="text-sm">
-                          <a href={`tel:${driver.emergencyContactPhone}`} className="text-primary hover:underline">
-                            {driver.emergencyContactPhone}
-                          </a>
-                        </div>
-                      )}
+                    </div>
+                  </div>
+                )}
+                
+                {driver.emergencyContactPhone && (
+                  <div className="space-y-1">
+                    <div className="text-sm text-muted-foreground">Emergency Contact Phone</div>
+                    <div className="font-medium">
+                      <a href={`tel:${driver.emergencyContactPhone}`} className="text-primary hover:underline">
+                        {driver.emergencyContactPhone}
+                      </a>
                     </div>
                   </div>
                 )}
@@ -406,6 +411,19 @@ export default function DriverProfilePage() {
                               );
                             })}
                           </TableBody>
+                          <TableFooter>
+                            <TableRow>
+                              <TableCell colSpan={3} className="font-medium">Totals</TableCell>
+                              <TableCell className="font-medium">{routes.reduce((sum, route) => sum + (route.mileage || 0), 0).toLocaleString()}</TableCell>
+                              <TableCell className="text-right font-medium">{formatCurrency(routes.reduce((sum, route) => sum + route.rate, 0))}</TableCell>
+                              <TableCell className="text-right font-medium">{formatCurrency(routes.reduce((sum, route) => sum + (route.soldFor || 0), 0))}</TableCell>
+                              <TableCell className="text-right font-medium">{formatCurrency(routes.reduce((sum, route) => {
+                                const grossDiff = route.soldFor ? route.rate - route.soldFor : 0;
+                                const percentIncome = route.soldFor ? route.soldFor * (driver.percentage / 100) : 0;
+                                return sum + grossDiff + percentIncome;
+                              }, 0))}</TableCell>
+                            </TableRow>
+                          </TableFooter>
                         </Table>
                       </div>
                     )}
@@ -564,7 +582,7 @@ export default function DriverProfilePage() {
       
       <footer className="border-t py-4 bg-muted/30">
         <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          &copy; {new Date().getFullYear()} Trucking Manager. All rights reserved.
+          &copy; {new Date().getFullYear()} CarrierXXL. All rights reserved.
         </div>
       </footer>
     </div>

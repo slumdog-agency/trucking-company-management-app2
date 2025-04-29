@@ -3,9 +3,8 @@ import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Schema } from "@/lib/db-types";
-import { fine } from "@/lib/fine";
 import { useToast } from "@/hooks/use-toast";
-import { Edit2, Save, Trash2, Plus, Search, Download, FileText } from "lucide-react";
+import { Edit2, Save, Trash2, Plus, Search, Download, FileText, X } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -42,6 +41,7 @@ import {
 } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { jsPDF } from "jspdf";
+import { getTrucks, addTruck, updateTruck, deleteTruck } from "@/lib/api";
 
 export default function TrucksPage() {
   const [trucks, setTrucks] = useState<Schema["trucks"][]>([]);
@@ -56,37 +56,37 @@ export default function TrucksPage() {
     model: "",
     year: undefined,
     vin: "",
-    licensePlate: ""
+    license_plate: ""
   });
   const [filters, setFilters] = useState<Array<{field: string, value: string, label: string}>>([]);
   const [filterInput, setFilterInput] = useState("");
   const [filterField, setFilterField] = useState("number");
   const [activeColumns, setActiveColumns] = useState<string[]>([
-    "number", "category", "make", "model", "year", "vin", "licensePlate"
+    "number", "category", "make", "model", "year", "vin", "license_plate"
   ]);
   const [isColumnMenuOpen, setIsColumnMenuOpen] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
-    fetchTrucks();
-  }, []);
-
-  const fetchTrucks = async () => {
+    const fetchData = async () => {
     setLoading(true);
     try {
-      const data = await fine.table("trucks").select();
-      setTrucks(data || []);
+        // Fetch trucks
+        const trucksData = await getTrucks();
+        setTrucks(trucksData || []);
     } catch (error) {
-      console.error("Error fetching trucks:", error);
+        console.error("Error fetching data:", error);
       toast({
         title: "Error",
-        description: "Failed to load trucks. Please try again.",
+          description: "Failed to load data. Please try again.",
         variant: "destructive",
       });
     } finally {
       setLoading(false);
     }
   };
+    fetchData();
+  }, [toast]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -130,24 +130,23 @@ export default function TrucksPage() {
     }
 
     try {
-      const addedTrucks = await fine.table("trucks").insert(newTruck).select();
-      if (addedTrucks && addedTrucks.length > 0) {
-        setTrucks([...trucks, addedTrucks[0]]);
-        setNewTruck({
-          number: "",
-          category: "Semi",
-          make: "",
-          model: "",
-          year: undefined,
-          vin: "",
-          licensePlate: ""
-        });
-        setIsDialogOpen(false);
-        toast({
-          title: "Success",
-          description: "Truck added successfully.",
-        });
-      }
+      await addTruck(newTruck);
+      const trucksData = await getTrucks();
+      setTrucks(trucksData || []);
+      setNewTruck({
+        number: "",
+        category: "Semi",
+        make: "",
+        model: "",
+        year: undefined,
+        vin: "",
+        license_plate: ""
+      });
+      setIsDialogOpen(false);
+      toast({
+        title: "Success",
+        description: "Truck added successfully.",
+      });
     } catch (error) {
       console.error("Error adding truck:", error);
       toast({
@@ -171,23 +170,11 @@ export default function TrucksPage() {
     }
 
     try {
-      await fine.table("trucks").update({
-        number: editingTruck.number,
-        category: editingTruck.category,
-        make: editingTruck.make,
-        model: editingTruck.model,
-        year: editingTruck.year,
-        vin: editingTruck.vin,
-        licensePlate: editingTruck.licensePlate
-      }).eq("id", editingTruck.id);
-      
-      setTrucks(trucks.map(truck => 
-        truck.id === editingTruck.id ? editingTruck : truck
-      ));
-      
+      await updateTruck(editingTruck.id, editingTruck);
+      const trucksData = await getTrucks();
+      setTrucks(trucksData || []);
       setEditingTruck(null);
       setIsDialogOpen(false);
-      
       toast({
         title: "Success",
         description: "Truck updated successfully.",
@@ -206,8 +193,9 @@ export default function TrucksPage() {
     if (!confirm("Are you sure you want to delete this truck?")) return;
 
     try {
-      await fine.table("trucks").delete().eq("id", id);
-      setTrucks(trucks.filter(truck => truck.id !== id));
+      await deleteTruck(id);
+      const trucksData = await getTrucks();
+      setTrucks(trucksData || []);
       toast({
         title: "Success",
         description: "Truck deleted successfully.",
@@ -237,7 +225,7 @@ export default function TrucksPage() {
       model: "Model",
       year: "Year",
       vin: "VIN",
-      licensePlate: "License Plate"
+      license_plate: "License Plate"
     }[filterField] || filterField;
     
     setFilters([...filters, { 
@@ -286,7 +274,7 @@ export default function TrucksPage() {
         model: "Model",
         year: "Year",
         vin: "VIN",
-        licensePlate: "License Plate"
+        license_plate: "License Plate"
       }[column] || column;
     });
     
@@ -336,7 +324,7 @@ export default function TrucksPage() {
           model: "Model",
           year: "Year",
           vin: "VIN",
-          licensePlate: "License Plate"
+          license_plate: "License Plate"
         }[column] || column;
       });
       
@@ -461,7 +449,7 @@ export default function TrucksPage() {
                       <option value="model">Model</option>
                       <option value="year">Year</option>
                       <option value="vin">VIN</option>
-                      <option value="licensePlate">License Plate</option>
+                      <option value="license_plate">License Plate</option>
                     </select>
                   </div>
                   <div className="flex items-center gap-2">
@@ -540,11 +528,11 @@ export default function TrucksPage() {
                     </div>
                     <div className="flex items-center space-x-2">
                       <Checkbox 
-                        id="column-licensePlate" 
-                        checked={activeColumns.includes('licensePlate')}
-                        onCheckedChange={() => toggleColumn('licensePlate')}
+                        id="column-license_plate" 
+                        checked={activeColumns.includes('license_plate')}
+                        onCheckedChange={() => toggleColumn('license_plate')}
                       />
-                      <Label htmlFor="column-licensePlate">License Plate</Label>
+                      <Label htmlFor="column-license_plate">License Plate</Label>
                     </div>
                   </div>
                 </div>
@@ -681,11 +669,11 @@ export default function TrucksPage() {
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="licensePlate">License Plate</Label>
+                    <Label htmlFor="license_plate">License Plate</Label>
                     <Input
-                      id="licensePlate"
-                      name="licensePlate"
-                      value={editingTruck ? editingTruck.licensePlate || "" : newTruck.licensePlate || ""}
+                      id="license_plate"
+                      name="license_plate"
+                      value={editingTruck ? editingTruck.license_plate || "" : newTruck.license_plate || ""}
                       onChange={handleInputChange}
                       placeholder="ABC123"
                     />
@@ -719,7 +707,7 @@ export default function TrucksPage() {
                   {!activeColumns.includes('make') && activeColumns.includes('model') && <TableHead>Model</TableHead>}
                   {activeColumns.includes('year') && <TableHead>Year</TableHead>}
                   {activeColumns.includes('vin') && <TableHead>VIN</TableHead>}
-                  {activeColumns.includes('licensePlate') && <TableHead>License Plate</TableHead>}
+                  {activeColumns.includes('license_plate') && <TableHead>License Plate</TableHead>}
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -746,7 +734,7 @@ export default function TrucksPage() {
                       {!activeColumns.includes('make') && activeColumns.includes('model') && <TableCell>{truck.model || "-"}</TableCell>}
                       {activeColumns.includes('year') && <TableCell>{truck.year || "-"}</TableCell>}
                       {activeColumns.includes('vin') && <TableCell>{truck.vin || "-"}</TableCell>}
-                      {activeColumns.includes('licensePlate') && <TableCell>{truck.licensePlate || "-"}</TableCell>}
+                      {activeColumns.includes('license_plate') && <TableCell>{truck.license_plate || "-"}</TableCell>}
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
                           <Button size="sm" variant="ghost" onClick={() => handleEditTruck(truck)}>
@@ -768,7 +756,7 @@ export default function TrucksPage() {
       
       <footer className="border-t py-4 bg-muted/30">
         <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          &copy; {new Date().getFullYear()} Trucking Manager. All rights reserved.
+          &copy; {new Date().getFullYear()} CarrierXXL. All rights reserved.
         </div>
       </footer>
     </div>

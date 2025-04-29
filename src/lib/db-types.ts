@@ -3,71 +3,81 @@ export type Schema = {
     id?: number;
     count: number;
     percentage: number;
-    firstName: string;
-    lastName: string;
-    dispatcher: string;
-    dispatcherId?: number | null;
+    first_name: string;
+    last_name: string;
+    dispatcher_id?: number | null;
     truck?: string | null;
     trailer?: string | null;
     phone?: string | null;
-    emergencyContactName?: string | null;
-    emergencyContactPhone?: string | null;
+    emergency_contact_name?: string | null;
+    emergency_contact_phone?: string | null;
     email?: string | null;
     category?: string | null;
-    createdAt?: string;
-    updatedAt?: string;
+    created_at?: string;
+    updated_at?: string;
   };
   
   routes: {
     id?: number;
-    driverId: number;
+    driver_id: number;
     date: string;
-    pickupZip: string;
-    pickupCounty?: string | null;
-    pickupCity?: string | null;
-    pickupState?: string | null;
-    deliveryZip: string;
-    deliveryCounty?: string | null;
-    deliveryCity?: string | null;
-    deliveryState?: string | null;
+    pickup_zip: string;
+    pickup_county?: string | null;
+    pickup_city?: string | null;
+    pickup_state?: string | null;
+    delivery_zip: string;
+    delivery_county?: string | null;
+    delivery_city?: string | null;
+    delivery_state?: string | null;
     mileage?: number | null;
     rate: number;
-    soldFor?: number | null;
-    divisionId?: number | null;
+    sold_for?: number | null;
+    division_id?: number | null;
     status?: string | null;
-    statusColor?: string | null;
-    customerLoadNumber?: string | null;
-    statusStartDate?: string | null;
-    statusEndDate?: string | null;
-    previousRouteIds?: string | null;
-    lastEditedBy?: string | null;
-    lastEditedAt?: string | null;
+    status_color?: string | null;
+    customer_load_number?: string | null;
+    status_start_date?: string | null;
+    status_end_date?: string | null;
+    previous_route_ids?: string | null;
+    last_edited_by?: string | null;
+    last_edited_at?: string | null;
     comments?: string | null;
-    lastCommentBy?: string | null;
-    lastCommentAt?: string | null;
-    createdAt?: string;
-    updatedAt?: string;
+    last_comment_by?: string | null;
+    last_comment_at?: string | null;
+    created_at?: string;
+    updated_at?: string;
   };
 
-  routeAudits: {
+  route_audits: {
     id?: number;
-    routeId: number;
-    userId?: number | null;
-    userName?: string | null;
-    changedFields: string;
-    oldValues?: string | null;
-    newValues?: string | null;
-    createdAt?: string;
+    route_id: number;
+    status: string;
+    comment?: string | null;
+    user_id?: number | null;
+    user_name?: string | null;
+    changed_fields: string;
+    old_values?: string | null;
+    new_values?: string | null;
+    created_at?: string;
+    updated_at?: string;
+  };
+
+  route_comments: {
+    id?: number;
+    route_id: number;
+    text: string;
+    by: string;
+    created_at?: string;
   };
 
   dispatchers: {
     id?: number;
-    firstName: string;
-    lastName: string;
+    first_name: string;
+    last_name: string;
     email?: string | null;
     phone?: string | null;
-    createdAt?: string;
-    updatedAt?: string;
+    created_at?: string;
+    updated_at?: string;
   };
 
   trucks: {
@@ -78,9 +88,9 @@ export type Schema = {
     model?: string | null;
     year?: number | null;
     vin?: string | null;
-    licensePlate?: string | null;
-    createdAt?: string;
-    updatedAt?: string;
+    license_plate?: string | null;
+    created_at?: string;
+    updated_at?: string;
   };
 
   trailers: {
@@ -90,49 +100,67 @@ export type Schema = {
     type?: string | null;
     length?: string | null;
     vin?: string | null;
-    licensePlate?: string | null;
-    createdAt?: string;
-    updatedAt?: string;
+    license_plate?: string | null;
+    created_at?: string;
+    updated_at?: string;
   };
 
   divisions: {
     id?: number;
-    companyName: string;
+    name: string;
+    description?: string | null;
     mc?: string | null;
     dot?: string | null;
     address?: string | null;
-    phoneNumber?: string | null;
-    createdAt?: string;
-    updatedAt?: string;
+    phone_number?: string | null;
+    created_at?: string;
+    updated_at?: string;
   };
 
-  zipCodes: {
+  zip_codes: {
     id?: number;
-    zipCode: string;
+    zip_code: string;
     city: string;
     state: string;
     county?: string | null;
-    createdAt?: string;
-    updatedAt?: string;
+    lat?: number | null;
+    lng?: number | null;
+    created_at?: string;
+    updated_at?: string;
   };
   
-  userPermissions: {
+  user_permissions: {
     id?: number;
-    userId: string;
+    user_id: number;
     section: string;
-    canRead: boolean;
-    canWrite: boolean;
-    createdAt?: string;
-    updatedAt?: string;
+    can_read: boolean;
+    can_write: boolean;
+    created_at?: string;
+    updated_at?: string;
   };
   
-  routeStatuses: {
+  route_statuses: {
     id?: number;
     name: string;
+    description?: string | null;
     color: string;
-    isDefault?: boolean;
-    sortOrder?: number;
-    createdAt?: string;
-    updatedAt?: string;
+    is_default?: boolean;
+    sort_order?: number;
+    created_at?: string;
+    updated_at?: string;
+  };
+
+  users: {
+    id?: number;
+    name: string;
+    email: string;
+    phone?: string | null;
+    extension?: string | null;
+    group: string;
+    permissions: string;
+    is_active: boolean;
+    created_at?: string;
+    deactivated_at?: string | null;
+    updated_at?: string | null;
   };
 }

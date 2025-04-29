@@ -4,7 +4,6 @@ import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Schema } from "@/lib/db-types";
-import { fine } from "@/lib/fine";
 import { useToast } from "@/hooks/use-toast";
 import { Edit2, Save, Trash2, Plus, Search } from "lucide-react";
 import {
@@ -22,66 +21,91 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { getDrivers, updateDriver, deleteDriver } from '@/lib/api';
 
 export default function DriversPage() {
   const [drivers, setDrivers] = useState<Schema["drivers"][]>([]);
-  const [dispatchers, setDispatchers] = useState<Schema["dispatchers"][]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<Schema["drivers"] | null>(null);
   const { toast } = useToast();
 
+  const fetchDrivers = async () => {
+    setLoading(true);
+    try {
+      const driversData = await getDrivers();
+      console.log('Fetched drivers data:', driversData);
+      // Ensure we have all required fields
+      const validatedData = (driversData || []).map(driver => ({
+        ...driver,
+        first_name: driver.first_name || '',
+        last_name: driver.last_name || '',
+        email: driver.email || '',
+        phone: driver.phone || '',
+        truck: driver.truck || ''
+      }));
+      setDrivers(validatedData);
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load data. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        // Fetch drivers
-        const driversData = await fine.table("drivers").select();
-        
-        // Sort drivers by count
-        const sortedDrivers = driversData ? [...driversData].sort((a, b) => a.count - b.count) : [];
-        setDrivers(sortedDrivers);
-        
-        // Fetch dispatchers
-        const dispatchersData = await fine.table("dispatchers").select();
-        setDispatchers(dispatchersData || []);
-      } catch (error) {
-        console.error("Error fetching data:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load data. Please try again.",
-          variant: "destructive",
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
+    fetchDrivers();
+  }, []);
 
-    fetchData();
-  }, [toast]);
-
-  const handleEdit = (driver: Schema["drivers"]) => {
-    setEditingId(driver.id || null);
-    setEditForm({ ...driver });
+  const handleEdit = (driver: Schema['drivers']) => {
+    setEditingId(driver.id!);
+    setEditForm({
+      ...driver,
+      emergency_contact_name: driver.emergency_contact_name || '',
+      emergency_contact_phone: driver.emergency_contact_phone || '',
+      first_name: driver.first_name || '',
+      last_name: driver.last_name || '',
+      email: driver.email || '',
+      phone: driver.phone || '',
+      truck: driver.truck || '',
+      trailer: driver.trailer || '',
+      count: driver.count || 0,
+      percentage: driver.percentage || 0,
+      dispatcher_id: driver.dispatcher_id || null
+    });
   };
 
   const handleSave = async () => {
     if (!editForm || !editingId) return;
-
     try {
-      await fine.table("drivers").update(editForm).eq("id", editingId);
-      setDrivers(drivers.map(driver => 
-        driver.id === editingId ? { ...driver, ...editForm } : driver
-      ));
+      await updateDriver(editingId, {
+        first_name: editForm.first_name,
+        last_name: editForm.last_name,
+        dispatcher_id: editForm.dispatcher_id,
+        truck: editForm.truck,
+        trailer: editForm.trailer,
+        phone: editForm.phone,
+        emergency_contact_name: editForm.emergency_contact_name,
+        emergency_contact_phone: editForm.emergency_contact_phone,
+        email: editForm.email,
+        category: editForm.category,
+        count: editForm.count,
+        percentage: editForm.percentage
+      });
+      setEditingId(null);
+      setEditForm(null);
+      await fetchDrivers();
       toast({
         title: "Success",
         description: "Driver updated successfully.",
       });
-      setEditingId(null);
-      setEditForm(null);
     } catch (error) {
-      console.error("Error updating driver:", error);
+      console.error('Error updating driver:', error);
       toast({
         title: "Error",
         description: "Failed to update driver. Please try again.",
@@ -94,25 +118,8 @@ export default function DriversPage() {
     if (!confirm("Are you sure you want to delete this driver?")) return;
 
     try {
-      await fine.table("drivers").delete().eq("id", id);
-      
-      // Get remaining drivers
-      const remainingDrivers = drivers.filter(driver => driver.id !== id);
-      
-      // Update counts to be sequential
-      const updatedDrivers = await Promise.all(
-        remainingDrivers.map(async (driver, index) => {
-          const newCount = index + 1;
-          if (driver.count !== newCount) {
-            await fine.table("drivers").update({ count: newCount }).eq("id", driver.id!);
-            return { ...driver, count: newCount };
-          }
-          return driver;
-        })
-      );
-      
-      setDrivers(updatedDrivers);
-      
+      await deleteDriver(id);
+      setDrivers(drivers.filter(d => d.id !== id));
       toast({
         title: "Success",
         description: "Driver deleted successfully.",
@@ -133,30 +140,14 @@ export default function DriversPage() {
     const { name, value } = e.target;
     setEditForm({
       ...editForm,
-      [name]: name === 'percentage' ? parseFloat(value) : value
+      [name]: name === 'count' || name === 'percentage' ? parseFloat(value) : value
     });
   };
 
-  const handleDispatcherChange = (value: string) => {
-    if (!editForm) return;
-    
-    const selectedDispatcher = dispatchers.find(d => d.id === parseInt(value));
-    
-    if (selectedDispatcher) {
-      setEditForm({
-        ...editForm,
-        dispatcherId: selectedDispatcher.id,
-        dispatcher: `${selectedDispatcher.firstName} ${selectedDispatcher.lastName}`
-      });
-    }
-  };
-
   const filteredDrivers = drivers.filter(driver => {
-    const fullName = `${driver.firstName} ${driver.lastName}`.toLowerCase();
+    const fullName = `${driver.first_name || ''} ${driver.last_name || ''}`.toLowerCase();
     return fullName.includes(searchTerm.toLowerCase()) || 
-           driver.dispatcher.toLowerCase().includes(searchTerm.toLowerCase()) ||
-           (driver.truck && driver.truck.toLowerCase().includes(searchTerm.toLowerCase())) ||
-           (driver.trailer && driver.trailer.toLowerCase().includes(searchTerm.toLowerCase()));
+           ((driver.truck || '').toLowerCase().includes(searchTerm.toLowerCase()));
   });
 
   return (
@@ -172,9 +163,9 @@ export default function DriversPage() {
             </p>
           </div>
           <Button asChild>
-            <a href="/">
+            <Link to="/">
               Back to Dashboard
-            </a>
+            </Link>
           </Button>
         </div>
         
@@ -203,19 +194,17 @@ export default function DriversPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-16">#</TableHead>
-                  <TableHead className="w-24">Percentage</TableHead>
-                  <TableHead>Driver Name</TableHead>
-                  <TableHead>Dispatcher</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Phone</TableHead>
                   <TableHead>Truck</TableHead>
-                  <TableHead>Trailer</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredDrivers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
+                    <TableCell colSpan={6} className="text-center py-8">
                       No drivers found
                     </TableCell>
                   </TableRow>
@@ -223,99 +212,79 @@ export default function DriversPage() {
                   filteredDrivers.map((driver) => (
                     <TableRow key={driver.id}>
                       <TableCell>
-                        {driver.count}
+                        {editingId === driver.id ? (
+                          <div className="flex gap-2">
+                            <Input
+                              name="first_name"
+                              value={editForm?.first_name}
+                              onChange={handleInputChange}
+                              className="w-24"
+                            />
+                            <Input
+                              name="last_name"
+                              value={editForm?.last_name}
+                              onChange={handleInputChange}
+                              className="w-24"
+                            />
+                          </div>
+                        ) : (
+                          `${driver.first_name} ${driver.last_name}`
+                        )}
                       </TableCell>
                       <TableCell>
                         {editingId === driver.id ? (
                           <Input
-                            type="number"
-                            name="percentage"
-                            value={editForm?.percentage}
+                            name="email"
+                            value={editForm?.email}
                             onChange={handleInputChange}
-                            className="h-8 w-20"
                           />
                         ) : (
-                          `${driver.percentage}%`
+                          driver.email
                         )}
                       </TableCell>
                       <TableCell>
                         {editingId === driver.id ? (
-                          <div className="flex gap-1">
-                            <Input
-                              name="firstName"
-                              value={editForm?.firstName}
-                              onChange={handleInputChange}
-                              className="h-8"
-                            />
-                            <Input
-                              name="lastName"
-                              value={editForm?.lastName}
-                              onChange={handleInputChange}
-                              className="h-8"
-                            />
-                          </div>
+                          <Input
+                            name="phone"
+                            value={editForm?.phone}
+                            onChange={handleInputChange}
+                          />
                         ) : (
-                          `${driver.firstName} ${driver.lastName}`
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {editingId === driver.id ? (
-                          <Select 
-                            defaultValue={driver.dispatcherId?.toString()} 
-                            onValueChange={handleDispatcherChange}
-                          >
-                            <SelectTrigger className="h-8">
-                              <SelectValue placeholder="Select a dispatcher" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {dispatchers.map((dispatcher) => (
-                                <SelectItem key={dispatcher.id} value={dispatcher.id?.toString() || ""}>
-                                  {dispatcher.firstName} {dispatcher.lastName}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          driver.dispatcher
+                          driver.phone
                         )}
                       </TableCell>
                       <TableCell>
                         {editingId === driver.id ? (
                           <Input
                             name="truck"
-                            value={editForm?.truck || ""}
+                            value={editForm?.truck}
                             onChange={handleInputChange}
-                            className="h-8"
-                            placeholder="Truck #"
                           />
                         ) : (
-                          driver.truck || "-"
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {editingId === driver.id ? (
-                          <Input
-                            name="trailer"
-                            value={editForm?.trailer || ""}
-                            onChange={handleInputChange}
-                            className="h-8"
-                            placeholder="Trailer #"
-                          />
-                        ) : (
-                          driver.trailer || "-"
+                          driver.truck
                         )}
                       </TableCell>
                       <TableCell className="text-right">
                         {editingId === driver.id ? (
-                          <Button size="sm" variant="ghost" onClick={handleSave}>
-                            <Save className="h-4 w-4" />
+                          <Button onClick={handleSave} size="sm">
+                            <Save className="h-4 w-4 mr-1" />
+                            Save
                           </Button>
                         ) : (
-                          <div className="flex justify-end gap-1">
-                            <Button size="sm" variant="ghost" onClick={() => handleEdit(driver)}>
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              onClick={() => handleEdit(driver)}
+                              variant="outline"
+                              size="sm"
+                            >
                               <Edit2 className="h-4 w-4" />
                             </Button>
-                            <Button size="sm" variant="ghost" onClick={() => handleDelete(driver.id!)}>
+                            <Button
+                              onClick={() => handleDelete(driver.id!)}
+                              variant="outline"
+                              size="sm"
+                              className="text-destructive"
+                            >
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
@@ -332,7 +301,7 @@ export default function DriversPage() {
       
       <footer className="border-t py-4 bg-muted/30">
         <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          &copy; {new Date().getFullYear()} Trucking Manager. All rights reserved.
+          &copy; {new Date().getFullYear()} CarrierXXL. All rights reserved.
         </div>
       </footer>
     </div>

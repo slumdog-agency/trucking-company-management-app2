@@ -3,7 +3,6 @@ import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Schema } from "@/lib/db-types";
-import { fine } from "@/lib/fine";
 import { useToast } from "@/hooks/use-toast";
 import { Edit2, Save, Trash2, Plus, Search } from "lucide-react";
 import {
@@ -22,6 +21,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { DispatcherForm } from "@/components/dispatchers/DispatcherForm";
+import { getDispatchers, addDispatcher, updateDispatcher, deleteDispatcher } from '@/lib/api';
 
 export default function DispatchersPage() {
   const [dispatchers, setDispatchers] = useState<Schema["dispatchers"][]>([]);
@@ -32,13 +32,10 @@ export default function DispatchersPage() {
   const { toast } = useToast();
 
   useEffect(() => {
-    fetchDispatchers();
-  }, []);
-
-  const fetchDispatchers = async () => {
+    const fetchData = async () => {
     setLoading(true);
     try {
-      const data = await fine.table("dispatchers").select();
+        const data = await getDispatchers();
       setDispatchers(data || []);
     } catch (error) {
       console.error("Error fetching dispatchers:", error);
@@ -51,18 +48,18 @@ export default function DispatchersPage() {
       setLoading(false);
     }
   };
+    fetchData();
+  }, [toast]);
 
-  const handleAddDispatcher = async (dispatcher: Schema["dispatchers"]) => {
+  const handleAddDispatcher = async (data: Schema["dispatchers"]) => {
     try {
-      const addedDispatchers = await fine.table("dispatchers").insert(dispatcher).select();
-      if (addedDispatchers && addedDispatchers.length > 0) {
-        setDispatchers([...dispatchers, addedDispatchers[0]]);
+      const newDispatcher = await addDispatcher(data);
+      setDispatchers([...dispatchers, newDispatcher]);
         setIsDialogOpen(false);
         toast({
           title: "Success",
           description: "Dispatcher added successfully.",
         });
-      }
     } catch (error) {
       console.error("Error adding dispatcher:", error);
       toast({
@@ -73,24 +70,14 @@ export default function DispatchersPage() {
     }
   };
 
-  const handleUpdateDispatcher = async (dispatcher: Schema["dispatchers"]) => {
-    if (!dispatcher.id) return;
-    
+  const handleUpdateDispatcher = async (data: Schema["dispatchers"]) => {
     try {
-      await fine.table("dispatchers").update({
-        firstName: dispatcher.firstName,
-        lastName: dispatcher.lastName,
-        email: dispatcher.email,
-        phone: dispatcher.phone
-      }).eq("id", dispatcher.id);
-      
+      const updatedDispatcher = await updateDispatcher(data);
       setDispatchers(dispatchers.map(d => 
-        d.id === dispatcher.id ? dispatcher : d
+        d.id === updatedDispatcher.id ? updatedDispatcher : d
       ));
-      
-      setEditingDispatcher(null);
       setIsDialogOpen(false);
-      
+      setEditingDispatcher(null);
       toast({
         title: "Success",
         description: "Dispatcher updated successfully.",
@@ -106,10 +93,8 @@ export default function DispatchersPage() {
   };
 
   const handleDeleteDispatcher = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this dispatcher?")) return;
-
     try {
-      await fine.table("dispatchers").delete().eq("id", id);
+      await deleteDispatcher(id);
       setDispatchers(dispatchers.filter(d => d.id !== id));
       toast({
         title: "Success",
@@ -125,15 +110,9 @@ export default function DispatchersPage() {
     }
   };
 
-  const handleEditDispatcher = (dispatcher: Schema["dispatchers"]) => {
-    setEditingDispatcher(dispatcher);
-    setIsDialogOpen(true);
-  };
-
   const filteredDispatchers = dispatchers.filter(dispatcher => {
     const fullName = `${dispatcher.firstName} ${dispatcher.lastName}`.toLowerCase();
-    return fullName.includes(searchTerm.toLowerCase()) || 
-           (dispatcher.email && dispatcher.email.toLowerCase().includes(searchTerm.toLowerCase()));
+    return fullName.includes(searchTerm.toLowerCase());
   });
 
   return (
@@ -145,13 +124,15 @@ export default function DispatchersPage() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Dispatcher Management</h1>
             <p className="text-muted-foreground mt-2">
-              View and manage all your dispatchers
+              View and manage all your dispatchers - edit names, contact info, and other details here
             </p>
           </div>
-          <Button asChild>
-            <a href="/">
-              Back to Dashboard
-            </a>
+          <Button onClick={() => {
+            setEditingDispatcher(null);
+            setIsDialogOpen(true);
+          }}>
+            <Plus className="h-4 w-4 mr-1" />
+            Add Dispatcher
           </Button>
         </div>
         
@@ -165,29 +146,6 @@ export default function DispatchersPage() {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="ml-4">
-                <Plus className="h-4 w-4 mr-1" />
-                Add Dispatcher
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>
-                  {editingDispatcher ? "Edit Dispatcher" : "Add New Dispatcher"}
-                </DialogTitle>
-              </DialogHeader>
-              <DispatcherForm 
-                dispatcher={editingDispatcher} 
-                onSubmit={editingDispatcher ? handleUpdateDispatcher : handleAddDispatcher}
-                onCancel={() => {
-                  setEditingDispatcher(null);
-                  setIsDialogOpen(false);
-                }}
-              />
-            </DialogContent>
-          </Dialog>
         </div>
         
         {loading ? (
@@ -200,13 +158,14 @@ export default function DispatchersPage() {
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Phone</TableHead>
+                  <TableHead>Extension</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredDispatchers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-8">
+                    <TableCell colSpan={5} className="text-center py-8">
                       No dispatchers found
                     </TableCell>
                   </TableRow>
@@ -216,11 +175,15 @@ export default function DispatchersPage() {
                       <TableCell>
                         {dispatcher.firstName} {dispatcher.lastName}
                       </TableCell>
-                      <TableCell>{dispatcher.email || "-"}</TableCell>
-                      <TableCell>{dispatcher.phone || "-"}</TableCell>
+                      <TableCell>{dispatcher.email}</TableCell>
+                      <TableCell>{dispatcher.phone}</TableCell>
+                      <TableCell>{dispatcher.extension}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
-                          <Button size="sm" variant="ghost" onClick={() => handleEditDispatcher(dispatcher)}>
+                          <Button size="sm" variant="ghost" onClick={() => {
+                            setEditingDispatcher(dispatcher);
+                            setIsDialogOpen(true);
+                          }}>
                             <Edit2 className="h-4 w-4" />
                           </Button>
                           <Button size="sm" variant="ghost" onClick={() => handleDeleteDispatcher(dispatcher.id!)}>
@@ -237,11 +200,23 @@ export default function DispatchersPage() {
         )}
       </main>
       
-      <footer className="border-t py-4 bg-muted/30">
-        <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          &copy; {new Date().getFullYear()} Trucking Manager. All rights reserved.
-        </div>
-      </footer>
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {editingDispatcher ? "Edit Dispatcher" : "Add New Dispatcher"}
+            </DialogTitle>
+          </DialogHeader>
+          <DispatcherForm
+            dispatcher={editingDispatcher}
+            onSubmit={editingDispatcher ? handleUpdateDispatcher : handleAddDispatcher}
+            onCancel={() => {
+              setIsDialogOpen(false);
+              setEditingDispatcher(null);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

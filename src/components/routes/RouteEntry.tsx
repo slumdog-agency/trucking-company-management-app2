@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Schema } from "@/lib/db-types";
 import { Button } from "@/components/ui/button";
-import { Plus, MapPin, DollarSign, Edit2, Copy, Check } from "lucide-react";
+import { Plus, MapPin, DollarSign, Edit2, Copy, Check, Trash2 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { RouteForm } from "./RouteForm";
 import {
@@ -19,9 +19,17 @@ interface RouteEntryProps {
   routes: Schema["routes"][];
   onAddRoute: (route: Schema["routes"]) => Promise<void>;
   onUpdateRoute: (id: number, route: Schema["routes"]) => Promise<void>;
+  onDeleteRoute: (id: number) => Promise<void>;
 }
 
-export function RouteEntry({ driverId, date, routes, onAddRoute, onUpdateRoute }: RouteEntryProps) {
+export function RouteEntry({ 
+  driverId, 
+  date, 
+  routes,
+  onAddRoute,
+  onUpdateRoute,
+  onDeleteRoute
+}: RouteEntryProps) {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingRoute, setEditingRoute] = useState<Schema["routes"] | null>(null);
@@ -71,20 +79,39 @@ export function RouteEntry({ driverId, date, routes, onAddRoute, onUpdateRoute }
                 color: getContrastTextColor(route.statusColor || '#f0f0f0') // Ensure text is visible
               }}
             >
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="absolute top-0 right-0 h-4 w-4 p-0" 
-                onClick={() => handleEditRoute(route)}
-              >
-                <Edit2 className="h-3 w-3" />
-              </Button>
-              
-              <div className="flex items-center gap-1">
-                <MapPin className="h-3 w-3" />
-                <span>
-                  {route.pickupState || ''}-{route.deliveryState || ''} {formatCurrency(route.rate)}
-                </span>
+              <div className="flex items-center justify-between gap-1">
+                <div className="flex-1">
+                  <div className="text-sm font-medium">
+                    {route.mileage} mi • ${route.rate}
+                  </div>
+                  {route.customerLoadNumber && (
+                    <div className="text-xs text-muted-foreground">
+                      Load #{route.customerLoadNumber}
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-6 w-6" 
+                    onClick={() => handleEditRoute(route)}
+                  >
+                    <Edit2 className="h-3 w-3" />
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-6 w-6 text-destructive" 
+                    onClick={() => {
+                      if (confirm("Are you sure you want to delete this route?")) {
+                        onDeleteRoute(route.id!);
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
               </div>
               
               <div className="flex items-center justify-between mt-1">

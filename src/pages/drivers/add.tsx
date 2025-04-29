@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Schema } from "@/lib/db-types";
-import { fine } from "@/lib/fine";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, ArrowLeft, Plus } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,6 +24,15 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { 
+  addDriver, 
+  getDispatchers, 
+  getTrucks, 
+  getTrailers, 
+  getDrivers,
+  addTruck,
+  addTrailer 
+} from "@/lib/api";
 
 export default function AddDriverPage() {
   const [isLoading, setIsLoading] = useState(false);
@@ -42,20 +50,19 @@ export default function AddDriverPage() {
     number: "",
     category: "Semi"
   });
-  const [formData, setFormData] = useState<Schema["drivers"]>({
+  const [formData, setFormData] = useState<Partial<Schema["drivers"]>>({
     count: 1,
-    percentage: 25,
-    firstName: "",
-    lastName: "",
-    dispatcher: "",
-    dispatcherId: null,
+    percentage: 0,
+    first_name: "",
+    last_name: "",
+    dispatcher_id: undefined,
     truck: "",
     trailer: "",
     phone: "",
-    emergencyContactName: "",
-    emergencyContactPhone: "",
+    emergency_contact_name: "",
+    emergency_contact_phone: "",
     email: "",
-    category: "Semi"
+    category: "Company"
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const navigate = useNavigate();
@@ -74,19 +81,19 @@ export default function AddDriverPage() {
         }
         
         // Fetch dispatchers
-        const dispatchersData = await fine.table("dispatchers").select();
+        const dispatchersData = await getDispatchers();
         setDispatchers(dispatchersData || []);
         
         // Fetch trucks
-        const trucksData = await fine.table("trucks").select();
+        const trucksData = await getTrucks();
         setTrucks(trucksData || []);
         
         // Fetch trailers
-        const trailersData = await fine.table("trailers").select();
+        const trailersData = await getTrailers();
         setTrailers(trailersData || []);
         
         // Fetch drivers to determine next count
-        const driversData = await fine.table("drivers").select();
+        const driversData = await getDrivers();
         if (driversData && driversData.length > 0) {
           const maxCount = Math.max(...driversData.map(d => d.count));
           setFormData(prev => ({
@@ -130,7 +137,7 @@ export default function AddDriverPage() {
     const { name, value } = e.target;
     setNewTruck(prev => ({
       ...prev,
-      [name]: name === 'year' ? parseInt(value) : value
+      [name]: value
     }));
   };
 
@@ -190,64 +197,48 @@ export default function AddDriverPage() {
 
   const handleDispatcherChange = (value: string) => {
     const selectedDispatcher = dispatchers.find(d => d.id === parseInt(value));
-    
     if (selectedDispatcher) {
       setFormData(prev => ({
         ...prev,
-        dispatcherId: selectedDispatcher.id,
-        dispatcher: `${selectedDispatcher.firstName} ${selectedDispatcher.lastName}`
+        dispatcher_id: selectedDispatcher.id,
+        first_name: selectedDispatcher.first_name,
+        last_name: selectedDispatcher.last_name
       }));
-    }
-    
-    // Clear error
-    if (errors.dispatcher) {
-      setErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors.dispatcher;
-        return newErrors;
-      });
     }
   };
 
   const handleTruckChange = (value: string) => {
     const selectedTruck = trucks.find(t => t.number === value);
-    
-    // If changing to a Box truck, clear trailer selection
-    if (selectedTruck && selectedTruck.category === "Box") {
+    if (selectedTruck) {
       setFormData(prev => ({
         ...prev,
-        truck: value,
-        trailer: "",
-        category: "Box"
-      }));
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        truck: value,
-        category: selectedTruck?.category || formData.category
+        truck: `${selectedTruck.number} - ${selectedTruck.make} ${selectedTruck.model} (${selectedTruck.license_plate})`
       }));
     }
   };
 
   const handleTrailerChange = (value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      trailer: value
-    }));
+    const selectedTrailer = trailers.find(t => t.number === value);
+    if (selectedTrailer) {
+      setFormData(prev => ({
+        ...prev,
+        trailer: `${selectedTrailer.number} - ${selectedTrailer.type} (${selectedTrailer.license_plate})`
+      }));
+    }
   };
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
-    if (!formData.firstName) {
-      newErrors.firstName = "First name is required";
+    if (!formData.first_name) {
+      newErrors.first_name = "First name is required";
     }
 
-    if (!formData.lastName) {
-      newErrors.lastName = "Last name is required";
+    if (!formData.last_name) {
+      newErrors.last_name = "Last name is required";
     }
 
-    if (!formData.dispatcher) {
+    if (!formData.dispatcher_id) {
       newErrors.dispatcher = "Dispatcher is required";
     }
 
@@ -263,21 +254,46 @@ export default function AddDriverPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!validateForm()) return;
-
-    setIsLoading(true);
-
+    
+    if (!formData.first_name || !formData.last_name) {
+      toast({
+        title: "Error",
+        description: "First and last name are required",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!formData.dispatcher_id) {
+      toast({
+        title: "Error",
+        description: "Please select a dispatcher",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     try {
-      const addedDrivers = await fine.table("drivers").insert(formData).select();
+      await addDriver({
+        count: formData.count || 1,
+        percentage: formData.percentage || 0,
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        dispatcher_id: formData.dispatcher_id,
+        truck: formData.truck,
+        trailer: formData.trailer,
+        phone: formData.phone,
+        emergency_contact_name: formData.emergency_contact_name,
+        emergency_contact_phone: formData.emergency_contact_phone,
+        email: formData.email,
+        category: formData.category
+      });
       
-      if (addedDrivers && addedDrivers.length > 0) {
-        toast({
-          title: "Success",
-          description: "Driver added successfully.",
-        });
-        navigate("/drivers");
-      }
+      navigate("/drivers");
+      toast({
+        title: "Success",
+        description: "Driver added successfully",
+      });
     } catch (error) {
       console.error("Error adding driver:", error);
       toast({
@@ -285,8 +301,6 @@ export default function AddDriverPage() {
         description: "Failed to add driver. Please try again.",
         variant: "destructive",
       });
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -295,35 +309,29 @@ export default function AddDriverPage() {
     
     if (!newTruck.number) {
       toast({
-        title: "Validation Error",
-        description: "Truck number is required.",
+        title: "Error",
+        description: "Truck number is required",
         variant: "destructive",
       });
       return;
     }
     
     try {
-      const addedTrucks = await fine.table("trucks").insert(newTruck).select();
-      
-      if (addedTrucks && addedTrucks.length > 0) {
-        setTrucks([...trucks, addedTrucks[0]]);
-        setFormData(prev => ({
-          ...prev,
-          truck: addedTrucks[0].number,
-          category: addedTrucks[0].category,
-          // If it's a Box truck, clear trailer
-          trailer: addedTrucks[0].category === "Box" ? "" : prev.trailer
-        }));
-        setNewTruck({
-          number: "",
-          category: "Semi"
-        });
-        setIsAddTruckDialogOpen(false);
-        toast({
-          title: "Success",
-          description: "Truck added successfully.",
-        });
-      }
+      const addedTruck = await addTruck(newTruck);
+      setTrucks(prev => [...prev, addedTruck]);
+      setFormData(prev => ({
+        ...prev,
+        truck: `${addedTruck.number} - ${addedTruck.make} ${addedTruck.model} (${addedTruck.license_plate})`
+      }));
+      setIsAddTruckDialogOpen(false);
+      setNewTruck({
+        number: "",
+        category: "Semi"
+      });
+      toast({
+        title: "Success",
+        description: "Truck added successfully",
+      });
     } catch (error) {
       console.error("Error adding truck:", error);
       toast({
@@ -339,32 +347,29 @@ export default function AddDriverPage() {
     
     if (!newTrailer.number) {
       toast({
-        title: "Validation Error",
-        description: "Trailer number is required.",
+        title: "Error",
+        description: "Trailer number is required",
         variant: "destructive",
       });
       return;
     }
     
     try {
-      const addedTrailers = await fine.table("trailers").insert(newTrailer).select();
-      
-      if (addedTrailers && addedTrailers.length > 0) {
-        setTrailers([...trailers, addedTrailers[0]]);
-        setFormData(prev => ({
-          ...prev,
-          trailer: addedTrailers[0].number
-        }));
-        setNewTrailer({
-          number: "",
-          category: "Semi"
-        });
-        setIsAddTrailerDialogOpen(false);
-        toast({
-          title: "Success",
-          description: "Trailer added successfully.",
-        });
-      }
+      const addedTrailer = await addTrailer(newTrailer);
+      setTrailers(prev => [...prev, addedTrailer]);
+      setFormData(prev => ({
+        ...prev,
+        trailer: `${addedTrailer.number} - ${addedTrailer.type} (${addedTrailer.license_plate})`
+      }));
+      setIsAddTrailerDialogOpen(false);
+      setNewTrailer({
+        number: "",
+        category: "Semi"
+      });
+      toast({
+        title: "Success",
+        description: "Trailer added successfully",
+      });
     } catch (error) {
       console.error("Error adding trailer:", error);
       toast({
@@ -446,29 +451,29 @@ export default function AddDriverPage() {
                   
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="firstName">First Name</Label>
+                      <Label htmlFor="first_name">First Name</Label>
                       <Input
-                        id="firstName"
-                        name="firstName"
-                        value={formData.firstName}
+                        id="first_name"
+                        name="first_name"
+                        value={formData.first_name}
                         onChange={handleInputChange}
                         disabled={isLoading}
-                        aria-invalid={!!errors.firstName}
+                        aria-invalid={!!errors.first_name}
                       />
-                      {errors.firstName && <p className="text-sm text-destructive">{errors.firstName}</p>}
+                      {errors.first_name && <p className="text-sm text-destructive">{errors.first_name}</p>}
                     </div>
                     
                     <div className="space-y-2">
-                      <Label htmlFor="lastName">Last Name</Label>
+                      <Label htmlFor="last_name">Last Name</Label>
                       <Input
-                        id="lastName"
-                        name="lastName"
-                        value={formData.lastName}
+                        id="last_name"
+                        name="last_name"
+                        value={formData.last_name}
                         onChange={handleInputChange}
                         disabled={isLoading}
-                        aria-invalid={!!errors.lastName}
+                        aria-invalid={!!errors.last_name}
                       />
-                      {errors.lastName && <p className="text-sm text-destructive">{errors.lastName}</p>}
+                      {errors.last_name && <p className="text-sm text-destructive">{errors.last_name}</p>}
                     </div>
                   </div>
                   
@@ -488,7 +493,7 @@ export default function AddDriverPage() {
                           <SelectContent>
                             {dispatchers.map((dispatcher) => (
                               <SelectItem key={dispatcher.id} value={dispatcher.id?.toString() || ""}>
-                                {dispatcher.firstName} {dispatcher.lastName}
+                                {dispatcher.first_name} {dispatcher.last_name}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -549,11 +554,11 @@ export default function AddDriverPage() {
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="emergencyContactName">Emergency Contact Name</Label>
+                    <Label htmlFor="emergency_contact_name">Emergency Contact Name</Label>
                     <Input
-                      id="emergencyContactName"
-                      name="emergencyContactName"
-                      value={formData.emergencyContactName || ""}
+                      id="emergency_contact_name"
+                      name="emergency_contact_name"
+                      value={formData.emergency_contact_name || ""}
                       onChange={handleInputChange}
                       disabled={isLoading}
                       placeholder="John Doe"
@@ -561,11 +566,11 @@ export default function AddDriverPage() {
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="emergencyContactPhone">Emergency Contact Phone</Label>
+                    <Label htmlFor="emergency_contact_phone">Emergency Contact Phone</Label>
                     <Input
-                      id="emergencyContactPhone"
-                      name="emergencyContactPhone"
-                      value={formData.emergencyContactPhone || ""}
+                      id="emergency_contact_phone"
+                      name="emergency_contact_phone"
+                      value={formData.emergency_contact_phone || ""}
                       onChange={handleInputChange}
                       disabled={isLoading}
                       placeholder="(555) 987-6543"
@@ -677,8 +682,8 @@ export default function AddDriverPage() {
                               <Label htmlFor="truckLicensePlate">License Plate</Label>
                               <Input
                                 id="truckLicensePlate"
-                                name="licensePlate"
-                                value={newTruck.licensePlate || ""}
+                                name="license_plate"
+                                value={newTruck.license_plate || ""}
                                 onChange={handleTruckInputChange}
                                 placeholder="ABC123"
                               />
@@ -704,8 +709,7 @@ export default function AddDriverPage() {
                       <SelectContent>
                         {trucks.map((truck) => (
                           <SelectItem key={truck.id} value={truck.number}>
-                            {truck.number} ({truck.category})
-                            {truck.make && truck.model ? ` - ${truck.make} ${truck.model}` : ""}
+                            {truck.number} - {truck.make} {truck.model} ({truck.license_plate})
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -795,8 +799,8 @@ export default function AddDriverPage() {
                                   <Label htmlFor="trailerLicensePlate">License Plate</Label>
                                   <Input
                                     id="trailerLicensePlate"
-                                    name="licensePlate"
-                                    value={newTrailer.licensePlate || ""}
+                                    name="license_plate"
+                                    value={newTrailer.license_plate || ""}
                                     onChange={handleTrailerInputChange}
                                     placeholder="XYZ789"
                                   />
@@ -816,16 +820,14 @@ export default function AddDriverPage() {
                         </Dialog>
                       </div>
                       
-                      <Select onValueChange={handleTrailerChange} disabled={formData.category === "Box"}>
+                      <Select onValueChange={handleTrailerChange}>
                         <SelectTrigger>
                           <SelectValue placeholder="Select a trailer" />
                         </SelectTrigger>
                         <SelectContent>
                           {trailers.map((trailer) => (
                             <SelectItem key={trailer.id} value={trailer.number}>
-                              {trailer.number} ({trailer.category})
-                              {trailer.type ? ` - ${trailer.type}` : ""}
-                              {trailer.length ? ` ${trailer.length}` : ""}
+                              {trailer.number} - {trailer.type} ({trailer.license_plate})
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -859,7 +861,7 @@ export default function AddDriverPage() {
       
       <footer className="border-t py-4 bg-muted/30">
         <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          &copy; {new Date().getFullYear()} Trucking Manager. All rights reserved.
+          &copy; {new Date().getFullYear()} CarrierXXL. All rights reserved.
         </div>
       </footer>
     </div>

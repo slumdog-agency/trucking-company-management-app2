@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Schema } from "@/lib/db-types";
+import { Schema, NewRoute } from "@/lib/db/schema";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,7 +7,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Calendar, ChevronDown, ChevronUp, Clock, User, ChevronRight, Copy, Check, DollarSign } from "lucide-react";
 import { calculateDistance, getLocationFromZip, saveZipCodeLocation, formatCurrency } from "@/lib/utils";
 import { ZipCodeInput } from "@/components/ui/ZipCodeInput";
-import { fine } from "@/lib/fine";
 import { useToast } from "@/hooks/use-toast";
 import {
   Select,
@@ -37,6 +36,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import { getRoutes, getRoute, addRoute, updateRoute, getDivisions } from "@/lib/api";
 
 interface RouteFormProps {
   driverId: number;
@@ -61,23 +61,25 @@ interface CityOption {
 
 export function RouteForm({ driverId, date, route, onSubmit, isEditing = false }: RouteFormProps) {
   const [isLoading, setIsLoading] = useState(false);
-  const [formData, setFormData] = useState<Schema["routes"]>(
-    route || {
+  const [formData, setFormData] = useState<Partial<Schema["routes"]>>({
       driverId,
       date,
-      pickupZip: "",
-      pickupCity: "",
-      pickupState: "",
-      deliveryZip: "",
-      deliveryCity: "",
-      deliveryState: "",
-      rate: 0,
-      soldFor: 0,
-      status: "",
-      customerLoadNumber: "",
-      comments: ""
-    }
-  );
+    status: route?.status || "Empty",
+    statusColor: route?.statusColor || "#FF9E44",
+    pickupZip: route?.pickupZip || "",
+    pickupCity: route?.pickupCity || "",
+    pickupState: route?.pickupState || "",
+    deliveryZip: route?.deliveryZip || "",
+    deliveryCity: route?.deliveryCity || "",
+    deliveryState: route?.deliveryState || "",
+    rate: route?.rate || 0,
+    soldFor: route?.soldFor || 0,
+    mileage: route?.mileage || 0,
+    customerLoadNumber: route?.customerLoadNumber || "",
+    divisionId: route?.divisionId || null,
+    comments: route?.comments || "[]",
+    previousRouteIds: route?.previousRouteIds || "[]"
+  });
   const [originalData, setOriginalData] = useState<Schema["routes"] | null>(route || null);
   const [pickupLocation, setPickupLocation] = useState<{city: string, state: string, county: string} | null>(null);
   const [deliveryLocation, setDeliveryLocation] = useState<{city: string, state: string, county: string} | null>(null);
@@ -100,96 +102,23 @@ export function RouteForm({ driverId, date, route, onSubmit, isEditing = false }
   const [earnings, setEarnings] = useState<number>(0);
   const [routeStatuses, setRouteStatuses] = useState<Schema["routeStatuses"][]>([]);
   const { toast } = useToast();
-  const { data: session } = fine.auth.useSession();
 
   useEffect(() => {
-    const fetchDivisions = async () => {
+    async function fetchDivisions() {
       setLoadingDivisions(true);
       try {
-        const data = await fine.table("divisions").select();
+        const data = await getDivisions();
         setDivisions(data || []);
       } catch (error) {
-        console.error("Error fetching divisions:", error);
+        setDivisions([]);
       } finally {
         setLoadingDivisions(false);
       }
-    };
-
-    const fetchPreviousRoutes = async () => {
-      try {
-        // Get routes from the past 14 days for this driver
-        const currentDate = new Date(date);
-        const fourteenDaysAgo = new Date(currentDate);
-        fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
-        
-        const formattedFourteenDaysAgo = format(fourteenDaysAgo, 'yyyy-MM-dd');
-        const formattedCurrentDate = format(currentDate, 'yyyy-MM-dd');
-        
-        // In a real app, you would use gte and lte for date range
-        // For this demo, we'll fetch all routes and filter them in JavaScript
-        const allRoutes = await fine.table("routes").select().eq("driverId", driverId);
-        
-        if (allRoutes) {
-          // Filter routes for the past 14 days
-          const recentRoutes = allRoutes.filter(route => 
-            route.date >= formattedFourteenDaysAgo && 
-            route.date <= formattedCurrentDate &&
-            route.date !== date // Exclude routes from the current day
-          );
-          
-          setPreviousRoutes(recentRoutes);
-        }
-      } catch (error) {
-        console.error("Error fetching previous routes:", error);
-      }
-    };
-    
-    const fetchRouteAudits = async () => {
-      if (isEditing && route?.id) {
-        try {
-          const audits = await fine.table("routeAudits").select().eq("routeId", route.id);
-          if (audits) {
-            // Sort by most recent first
-            setRouteAudits(audits.sort((a, b) => {
-              return new Date(b.createdAt || "").getTime() - new Date(a.createdAt || "").getTime();
-            }));
-          }
-        } catch (error) {
-          console.error("Error fetching route audits:", error);
-        }
-      }
-    };
-    
-    const fetchCityOptions = async () => {
-      try {
-        const zipData = await fine.table("zipCodes").select();
-        if (zipData) {
-          const cityOptions: CityOption[] = zipData.map(zip => ({
-            city: zip.city,
-            state: zip.state,
-            zipCode: zip.zipCode,
-            county: zip.county
-          }));
-          
-          setPickupCityOptions(cityOptions);
-          setDeliveryCityOptions(cityOptions);
-        }
-      } catch (error) {
-        console.error("Error fetching city options:", error);
-      }
-    };
-    
-    const fetchRouteStatuses = async () => {
-      try {
-        const statusData = await fine.table("routeStatuses").select();
-        if (statusData && statusData.length > 0) {
-          // Sort by sortOrder if available
-          const sortedStatuses = statusData.sort((a, b) => 
-            (a.sortOrder || 0) - (b.sortOrder || 0)
-          );
-          setRouteStatuses(sortedStatuses);
-        } else {
-          // Fallback to hardcoded statuses
+    }
+    fetchDivisions();
+    setPreviousRoutes([]);
+    setPickupCityOptions([]);
+    setDeliveryCityOptions([]);
           setRouteStatuses([
             { name: "Empty", color: "#FF9E44" },
             { name: "Service", color: "#4169E1" },
@@ -201,50 +130,29 @@ export function RouteForm({ driverId, date, route, onSubmit, isEditing = false }
             { name: "34 hour reset", color: "#DDA0DD" },
             { name: "Not answering", color: "#4682B4" }
           ]);
-        }
-      } catch (error) {
-        console.error("Error fetching route statuses:", error);
-      }
-    };
-    
-    fetchDivisions();
-    fetchPreviousRoutes();
-    fetchCityOptions();
-    fetchRouteStatuses();
-    
-    if (isEditing) {
-      fetchRouteAudits();
-      
-      // Parse previous route IDs if they exist
-      if (route?.previousRouteIds) {
-        try {
-          const parsedIds = JSON.parse(route.previousRouteIds);
-          if (Array.isArray(parsedIds)) {
-            setSelectedPreviousRoutes(parsedIds);
-          }
-        } catch (e) {
-          console.error("Error parsing previous route IDs:", e);
-        }
-      }
-      
-      // Parse comments if they exist
-      if (route?.comments) {
-        try {
-          const parsedComments = JSON.parse(route.comments);
-          if (Array.isArray(parsedComments)) {
-            setComments(parsedComments);
-          }
-        } catch (e) {
-          console.error("Error parsing comments:", e);
-        }
-      }
+  }, []);
+
+  useEffect(() => {
+    const shouldCalculate =
+      formData.pickupZip && formData.pickupZip.length === 5 &&
+      formData.deliveryZip && formData.deliveryZip.length === 5 &&
+      formData.pickupCity && formData.pickupState &&
+      formData.deliveryCity && formData.deliveryState;
+
+    if (shouldCalculate) {
+      (async () => {
+        const mileage = await calculateDistance(formData.pickupZip!, formData.deliveryZip!);
+        setCalculatedMileage(mileage);
+        setFormData(prev => ({ ...prev, mileage }));
+      })();
     }
-    
-    // Calculate earnings when rate or soldFor changes
-    if (formData.rate !== undefined && formData.soldFor !== undefined) {
-      setEarnings(formData.rate - (formData.soldFor || 0));
-    }
-  }, [driverId, date, route, isEditing, formData.rate, formData.soldFor]);
+  }, [formData.pickupZip, formData.deliveryZip, formData.pickupCity, formData.pickupState, formData.deliveryCity, formData.deliveryState]);
+
+  useEffect(() => {
+    const rate = Number(formData.rate) || 0;
+    const soldFor = Number(formData.soldFor) || 0;
+    setEarnings(rate - soldFor);
+  }, [formData.rate, formData.soldFor]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -291,7 +199,7 @@ export function RouteForm({ driverId, date, route, onSubmit, isEditing = false }
               ...prev,
               pickupCity: locationData.city,
               pickupState: locationData.state,
-              pickupCounty: locationData.county
+              pickupCounty: typeof (locationData as any).county === 'string' ? (locationData as any).county : ""
             }));
           } else if (name === 'deliveryZip') {
             setDeliveryLocation(locationData);
@@ -299,12 +207,25 @@ export function RouteForm({ driverId, date, route, onSubmit, isEditing = false }
               ...prev,
               deliveryCity: locationData.city,
               deliveryState: locationData.state,
-              deliveryCounty: locationData.county
+              deliveryCounty: typeof (locationData as any).county === 'string' ? (locationData as any).county : ""
             }));
           }
+
+          // Save the zip code location for future use
+          await saveZipCodeLocation({
+            zipCode: value,
+            city: locationData.city,
+            state: locationData.state,
+            county: typeof (locationData as any).county === 'string' ? (locationData as any).county : ""
+          });
         }
       } catch (error) {
         console.error(`Error getting location for ${value}:`, error);
+        setErrors(prev => ({
+          ...prev,
+          [name]: "Invalid ZIP code"
+        }));
+        return;
       }
     }
 
@@ -355,7 +276,7 @@ export function RouteForm({ driverId, date, route, onSubmit, isEditing = false }
         pickupZip: option.zipCode,
         pickupCity: option.city,
         pickupState: option.state,
-        pickupCounty: option.county || ""
+        pickupCounty: typeof (option as any).county === 'string' ? (option as any).county : ""
       }));
       setIsPickupCityOpen(false);
       
@@ -374,7 +295,7 @@ export function RouteForm({ driverId, date, route, onSubmit, isEditing = false }
         deliveryZip: option.zipCode,
         deliveryCity: option.city,
         deliveryState: option.state,
-        deliveryCounty: option.county || ""
+        deliveryCounty: typeof (option as any).county === 'string' ? (option as any).county : ""
       }));
       setIsDeliveryCityOpen(false);
       
@@ -448,7 +369,7 @@ export function RouteForm({ driverId, date, route, onSubmit, isEditing = false }
     
     const comment: RouteComment = {
       text: newComment.trim(),
-      by: session?.user?.name || session?.user?.email || "Unknown user",
+      by: "Unknown user",
       at: new Date().toISOString()
     };
     
@@ -538,88 +459,117 @@ export function RouteForm({ driverId, date, route, onSubmit, isEditing = false }
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!validateForm()) return;
+    if (!validateForm()) {
+      return;
+    }
 
     setIsLoading(true);
 
     try {
-      // Save custom zip code data if entered manually
-      if (formData.pickupZip && formData.pickupCity && formData.pickupState) {
-        await saveZipCodeLocation(
-          formData.pickupZip,
-          formData.pickupCity,
-          formData.pickupState,
-          formData.pickupCounty || ""
-        );
-      }
-
-      if (formData.deliveryZip && formData.deliveryCity && formData.deliveryState) {
-        await saveZipCodeLocation(
-          formData.deliveryZip,
-          formData.deliveryCity,
-          formData.deliveryState,
-          formData.deliveryCounty || ""
-        );
-      }
-
-      // Create the complete route object
-      const completeRoute: Schema["routes"] = {
-        ...formData,
+      // Prepare route data
+      const routeData: Schema["routes"] = {
         driverId,
         date,
-        mileage: calculatedMileage || 0,
-        previousRouteIds: selectedPreviousRoutes.length > 0 ? JSON.stringify(selectedPreviousRoutes) : null,
-        comments: comments.length > 0 ? JSON.stringify(comments) : null
+        pickupZip: formData.pickupZip || "",
+        pickupCity: formData.pickupCity || "",
+        pickupState: formData.pickupState || "",
+        pickupCounty: formData.pickupCounty || "",
+        deliveryZip: formData.deliveryZip || "",
+        deliveryCity: formData.deliveryCity || "",
+        deliveryState: formData.deliveryState || "",
+        deliveryCounty: formData.deliveryCounty || "",
+        mileage: formData.mileage || 0,
+        rate: formData.rate || 0,
+        soldFor: formData.soldFor || 0,
+        status: formData.status || "Empty",
+        statusColor: formData.statusColor || "#FF9E44",
+        customerLoadNumber: formData.customerLoadNumber || "",
+        divisionId: formData.divisionId || null,
+        comments: JSON.stringify(comments),
+        previousRouteIds: JSON.stringify(selectedPreviousRoutes),
+        lastEditedBy: "Unknown user",
+        lastEditedAt: new Date().toISOString()
       };
 
-      // If there's a new comment, add it and update the last comment info
-      if (newComment.trim()) {
-        const newCommentObj: RouteComment = {
-          text: newComment.trim(),
-          by: session?.user?.name || session?.user?.email || "Unknown user",
-          at: new Date().toISOString()
-        };
-        
-        const updatedComments = [...comments, newCommentObj];
-        completeRoute.comments = JSON.stringify(updatedComments);
-        completeRoute.lastCommentBy = newCommentObj.by;
-        completeRoute.lastCommentAt = newCommentObj.at;
-      }
-
-      // If editing, add audit information
       if (isEditing && route?.id) {
+        // Update existing route
         const changedFields = getChangedFields();
-        const changedFieldsCount = Object.keys(changedFields).length;
-        
-        if (changedFieldsCount > 0 || newComment.trim()) {
-          // Add audit information
-          completeRoute.lastEditedBy = session?.user?.name || session?.user?.email || "Unknown user";
-          completeRoute.lastEditedAt = new Date().toISOString();
-          
-          // Create audit record
-          await fine.table("routeAudits").insert({
-            routeId: route.id,
-            userId: session?.user?.id ? parseInt(session.user.id) : null,
-            userName: session?.user?.name || session?.user?.email || "Unknown user",
-            changedFields: JSON.stringify(Object.keys(changedFields)),
-            oldValues: JSON.stringify(Object.entries(changedFields).reduce((acc, [key, value]) => {
-              acc[key] = value.old;
-              return acc;
-            }, {} as Record<string, any>)),
-            newValues: JSON.stringify(Object.entries(changedFields).reduce((acc, [key, value]) => {
-              acc[key] = value.new;
-              return acc;
-            }, {} as Record<string, any>))
-          });
+        const oldValues = Object.fromEntries(
+          Object.keys(changedFields).map(field => [field, route[field]])
+        );
+        const newValues = Object.fromEntries(
+          Object.keys(changedFields).map(field => [field, routeData[field]])
+        );
+
+        // Ensure all required fields for update
+        const updateData = {
+          ...routeData,
+          id: route.id,
+          pickupCity: routeData.pickupCity || "",
+          pickupState: routeData.pickupState || "",
+          pickupCounty: routeData.pickupCounty || "",
+          deliveryCity: routeData.deliveryCity || "",
+          deliveryState: routeData.deliveryState || "",
+          deliveryCounty: routeData.deliveryCounty || "",
+          mileage: routeData.mileage || 0,
+          rate: routeData.rate || 0,
+          soldFor: routeData.soldFor || 0,
+          status: routeData.status || "Empty",
+          statusColor: routeData.statusColor || "#FF9E44",
+          customerLoadNumber: routeData.customerLoadNumber || "",
+          divisionId: routeData.divisionId || null,
+          comments: routeData.comments || "[]",
+          previousRouteIds: routeData.previousRouteIds || "[]",
+          lastEditedBy: routeData.lastEditedBy || "Unknown user",
+          lastEditedAt: routeData.lastEditedAt || new Date().toISOString(),
+        };
+        await updateRoute(route.id, updateData);
+        toast({
+          title: "Route updated",
+          description: "The route has been updated successfully.",
+        });
+      } else {
+        // Create new route (remove id if present)
+        const { id, ...newRouteData } = routeData;
+        // Ensure all required fields for add
+        const addData: NewRoute = {
+          ...newRouteData,
+          pickupCity: newRouteData.pickupCity || "",
+          pickupState: newRouteData.pickupState || "",
+          pickupCounty: newRouteData.pickupCounty || "",
+          deliveryCity: newRouteData.deliveryCity || "",
+          deliveryState: newRouteData.deliveryState || "",
+          deliveryCounty: newRouteData.deliveryCounty || "",
+          mileage: newRouteData.mileage || 0,
+          rate: newRouteData.rate || 0,
+          soldFor: newRouteData.soldFor || 0,
+          status: newRouteData.status || "Empty",
+          statusColor: newRouteData.statusColor || "#FF9E44",
+          customerLoadNumber: newRouteData.customerLoadNumber || "",
+          divisionId: newRouteData.divisionId || null,
+          comments: newRouteData.comments || "[]",
+          previousRouteIds: newRouteData.previousRouteIds || "[]",
+          lastEditedBy: newRouteData.lastEditedBy || "Unknown user",
+          lastEditedAt: newRouteData.lastEditedAt || new Date().toISOString(),
+        };
+        const result = await addRoute(addData);
+
+        if (!result || result.length === 0) {
+          throw new Error("Failed to create route");
         }
+
+        toast({
+          title: "Route created",
+          description: "The new route has been created successfully.",
+          });
       }
 
-      await onSubmit(completeRoute);
+      await onSubmit(routeData);
     } catch (error) {
       console.error("Error saving route:", error);
       toast({
         title: "Error",
-        description: "Failed to save route. Please try again.",
+        description: `There was an error saving the route. Please try again.\n${error instanceof Error ? error.message : String(error)}`,
         variant: "destructive",
       });
     } finally {
@@ -752,6 +702,24 @@ export function RouteForm({ driverId, date, route, onSubmit, isEditing = false }
     { name: "Wyoming", code: "WY" }
   ];
 
+  const handlePickupLocationChange = (location: { city: string; state: string }) => {
+    setFormData(prev => ({
+      ...prev,
+      pickupCity: location.city,
+      pickupState: location.state,
+      pickupCounty: "" // Optional field
+    }));
+  };
+
+  const handleDeliveryLocationChange = (location: { city: string; state: string }) => {
+    setFormData(prev => ({
+      ...prev,
+      deliveryCity: location.city,
+      deliveryState: location.state,
+      deliveryCounty: "" // Optional field
+    }));
+  };
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4 bg-white text-black">
       <div className="grid grid-cols-2 gap-4">
@@ -867,177 +835,85 @@ export function RouteForm({ driverId, date, route, onSubmit, isEditing = false }
       </div>
 
       {/* Pickup Location */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="pickupState">Pickup State</Label>
-          <Select 
-            value={formData.pickupState || undefined}
-            onValueChange={(value) => handleCityStateChange('pickup', 'state', value)}
-          >
-            <SelectTrigger className={errors.pickupState ? "border-destructive" : ""}>
-              <SelectValue placeholder="Select state" />
-            </SelectTrigger>
-            <SelectContent>
-              {usStates.map((state) => (
-                <SelectItem key={state.code} value={state.code}>
-                  {state.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {errors.pickupState && <p className="text-sm text-destructive">{errors.pickupState}</p>}
-        </div>
+      <div className="grid grid-cols-3 gap-4">
+        <ZipCodeInput
+          id="pickupZip"
+          label="Pickup ZIP"
+          value={formData.pickupZip || ""}
+          onChange={(value) => setFormData(prev => ({ ...prev, pickupZip: value }))}
+          onLocationChange={(location) => {
+            setFormData(prev => ({
+              ...prev,
+              pickupCity: location.city,
+              pickupState: location.state,
+              pickupCounty: typeof (location as any).county === 'string' ? (location as any).county : ""
+            }));
+          }}
+          disabled={isLoading}
+          error={errors.pickupZip}
+        />
 
         <div className="space-y-2">
-          <Label htmlFor="deliveryState">Delivery State</Label>
-          <Select 
-            value={formData.deliveryState || undefined}
-            onValueChange={(value) => handleCityStateChange('delivery', 'state', value)}
-          >
-            <SelectTrigger className={errors.deliveryState ? "border-destructive" : ""}>
-              <SelectValue placeholder="Select state" />
-            </SelectTrigger>
-            <SelectContent>
-              {usStates.map((state) => (
-                <SelectItem key={state.code} value={state.code}>
-                  {state.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {errors.deliveryState && <p className="text-sm text-destructive">{errors.deliveryState}</p>}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="pickupCity">Pickup City</Label>
-          <Popover open={isPickupCityOpen} onOpenChange={setIsPickupCityOpen}>
-            <PopoverTrigger asChild>
+          <Label htmlFor="pickupCity">City</Label>
               <Input
                 id="pickupCity"
-                name="pickupCity"
                 value={formData.pickupCity || ""}
-                onChange={(e) => handleCityStateChange('pickup', 'city', e.target.value)}
-                onFocus={() => setIsPickupCityOpen(true)}
-                disabled={isLoading}
-                aria-invalid={!!errors.pickupCity}
-                placeholder="Enter city name"
-                className={errors.pickupCity ? "border-destructive" : ""}
-              />
-            </PopoverTrigger>
-            <PopoverContent className="w-[300px] p-0" align="start">
-              <Command>
-                <CommandInput 
-                  placeholder="Search cities..." 
-                  value={pickupCitySearch}
-                  onValueChange={setPickupCitySearch}
-                />
-                <CommandList>
-                  <CommandEmpty>No cities found</CommandEmpty>
-                  <CommandGroup>
-                    {filteredPickupCityOptions.map((option, index) => (
-                      <CommandItem
-                        key={`${option.zipCode}-${index}`}
-                        onSelect={() => handleCitySelect('pickup', option)}
-                      >
-                        {option.city}, {option.state} ({option.zipCode})
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
+            disabled
+            className="bg-muted/50"
+          />
           {errors.pickupCity && <p className="text-sm text-destructive">{errors.pickupCity}</p>}
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="deliveryCity">Delivery City</Label>
-          <Popover open={isDeliveryCityOpen} onOpenChange={setIsDeliveryCityOpen}>
-            <PopoverTrigger asChild>
+          <Label htmlFor="pickupState">State</Label>
               <Input
-                id="deliveryCity"
-                name="deliveryCity"
-                value={formData.deliveryCity || ""}
-                onChange={(e) => handleCityStateChange('delivery', 'city', e.target.value)}
-                onFocus={() => setIsDeliveryCityOpen(true)}
-                disabled={isLoading}
-                aria-invalid={!!errors.deliveryCity}
-                placeholder="Enter city name"
-                className={errors.deliveryCity ? "border-destructive" : ""}
-              />
-            </PopoverTrigger>
-            <PopoverContent className="w-[300px] p-0" align="start">
-              <Command>
-                <CommandInput 
-                  placeholder="Search cities..." 
-                  value={deliveryCitySearch}
-                  onValueChange={setDeliveryCitySearch}
-                />
-                <CommandList>
-                  <CommandEmpty>No cities found</CommandEmpty>
-                  <CommandGroup>
-                    {filteredDeliveryCityOptions.map((option, index) => (
-                      <CommandItem
-                        key={`${option.zipCode}-${index}`}
-                        onSelect={() => handleCitySelect('delivery', option)}
-                      >
-                        {option.city}, {option.state} ({option.zipCode})
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
-          {errors.deliveryCity && <p className="text-sm text-destructive">{errors.deliveryCity}</p>}
+            id="pickupState"
+            value={formData.pickupState || ""}
+            disabled
+            className="bg-muted/50"
+          />
+          {errors.pickupState && <p className="text-sm text-destructive">{errors.pickupState}</p>}
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="pickupZip">Pickup ZIP Code</Label>
+      <div className="grid grid-cols-3 gap-4">
           <ZipCodeInput
-            id="pickupZip"
-            name="pickupZip"
-            value={formData.pickupZip}
-            onChange={(e) => handleZipChange('pickupZip', e.target.value)}
+          id="deliveryZip"
+          label="Delivery ZIP"
+          value={formData.deliveryZip || ""}
+          onChange={(value) => setFormData(prev => ({ ...prev, deliveryZip: value }))}
             onLocationChange={(location) => {
-              setPickupLocation(location);
               setFormData(prev => ({
                 ...prev,
-                pickupCity: location.city,
-                pickupState: location.state,
-                pickupCounty: location.county
+              deliveryCity: location.city,
+              deliveryState: location.state,
+              deliveryCounty: typeof (location as any).county === 'string' ? (location as any).county : ""
               }));
             }}
             disabled={isLoading}
-            aria-invalid={!!errors.pickupZip}
+          error={errors.deliveryZip}
+        />
+        
+        <div className="space-y-2">
+          <Label htmlFor="deliveryCity">City</Label>
+          <Input
+            id="deliveryCity"
+            value={formData.deliveryCity || ""}
+            disabled
+            className="bg-muted/50"
           />
-          {errors.pickupZip && <p className="text-sm text-destructive">{errors.pickupZip}</p>}
+          {errors.deliveryCity && <p className="text-sm text-destructive">{errors.deliveryCity}</p>}
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="deliveryZip">Delivery ZIP Code</Label>
-          <ZipCodeInput
-            id="deliveryZip"
-            name="deliveryZip"
-            value={formData.deliveryZip}
-            onChange={(e) => handleZipChange('deliveryZip', e.target.value)}
-            onLocationChange={(location) => {
-              setDeliveryLocation(location);
-              setFormData(prev => ({
-                ...prev,
-                deliveryCity: location.city,
-                deliveryState: location.state,
-                deliveryCounty: location.county
-              }));
-            }}
-            disabled={isLoading}
-            aria-invalid={!!errors.deliveryZip}
+          <Label htmlFor="deliveryState">State</Label>
+          <Input
+            id="deliveryState"
+            value={formData.deliveryState || ""}
+            disabled
+            className="bg-muted/50"
           />
-          {errors.deliveryZip && <p className="text-sm text-destructive">{errors.deliveryZip}</p>}
+          {errors.deliveryState && <p className="text-sm text-destructive">{errors.deliveryState}</p>}
         </div>
       </div>
 
@@ -1135,47 +1011,6 @@ export function RouteForm({ driverId, date, route, onSubmit, isEditing = false }
         <div className="text-xs text-muted-foreground mt-2">
           Last edited by {route.lastEditedBy} on {route.lastEditedAt ? new Date(route.lastEditedAt).toLocaleString() : "unknown date"}
         </div>
-      )}
-
-      {isEditing && routeAudits.length > 0 && (
-        <Accordion type="single" collapsible className="w-full">
-          <AccordionItem value="audit-history">
-            <AccordionTrigger className="text-sm">
-              View Edit History ({routeAudits.length} {routeAudits.length === 1 ? "change" : "changes"})
-            </AccordionTrigger>
-            <AccordionContent>
-              <div className="space-y-4 max-h-60 overflow-y-auto p-2">
-                {routeAudits.map((audit) => {
-                  const { changedFields, oldValues, newValues, formattedDate } = formatAuditData(audit);
-                  return (
-                    <div key={audit.id} className="border rounded-md p-3 text-sm">
-                      <div className="flex items-center gap-2 mb-2 text-muted-foreground">
-                        <User className="h-3 w-3" />
-                        <span>{audit.userName || "Unknown user"}</span>
-                        <Clock className="h-3 w-3 ml-2" />
-                        <span>{formattedDate}</span>
-                      </div>
-                      <div className="space-y-2">
-                        {changedFields.map((field: string) => (
-                          <div key={field} className="grid grid-cols-2 gap-2">
-                            <div className="font-medium">{formatFieldName(field)}:</div>
-                            <div className="flex items-center gap-2">
-                              <span className="line-through text-muted-foreground">
-                                {formatFieldValue(field, oldValues[field])}
-                              </span>
-                              <ChevronRight className="h-3 w-3 text-muted-foreground" />
-                              <span>{formatFieldValue(field, newValues[field])}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
       )}
 
       <Button type="submit" className="w-full" disabled={isLoading}>
