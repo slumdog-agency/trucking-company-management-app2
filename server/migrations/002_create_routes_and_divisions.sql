@@ -12,6 +12,9 @@ CREATE TABLE IF NOT EXISTS route_statuses (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
     description TEXT,
+    color TEXT NOT NULL,
+    is_default BOOLEAN DEFAULT false,
+    sort_order INTEGER,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -80,11 +83,11 @@ CREATE TRIGGER update_route_audits_updated_at
     EXECUTE FUNCTION update_updated_at_column();
 
 -- Insert default route statuses
-INSERT INTO route_statuses (name, description) VALUES
-    ('Pending', 'Route is pending'),
-    ('In Progress', 'Route is in progress'),
-    ('Completed', 'Route is completed'),
-    ('Cancelled', 'Route is cancelled');
+INSERT INTO route_statuses (name, description, color, is_default, sort_order) VALUES
+    ('Pending', 'Route is pending', '#FFA500', true, 1),
+    ('In Progress', 'Route is in progress', '#4169E1', false, 2),
+    ('Completed', 'Route is completed', '#32CD32', false, 3),
+    ('Cancelled', 'Route is cancelled', '#FF0000', false, 4);
 
 -- Insert sample division
 INSERT INTO divisions (name, description) VALUES 

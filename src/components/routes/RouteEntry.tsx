@@ -14,7 +14,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface RouteEntryProps {
-  driverId: number;
+  driver_id: number;
   date: string;
   routes: Schema["routes"][];
   onAddRoute: (route: Schema["routes"]) => Promise<void>;
@@ -23,7 +23,7 @@ interface RouteEntryProps {
 }
 
 export function RouteEntry({ 
-  driverId, 
+  driver_id, 
   date, 
   routes,
   onAddRoute,
@@ -64,7 +64,7 @@ export function RouteEntry({
 
   // Calculate gross difference for the day
   const dailyGrossDifference = routes.reduce((total, route) => 
-    total + (route.soldFor ? route.rate - route.soldFor : 0), 0);
+    total + (route.sold_for ? route.rate - route.sold_for : 0), 0);
 
   return (
     <div className="min-h-[66px] p-1 route-entry">
@@ -75,8 +75,8 @@ export function RouteEntry({
               key={route.id} 
               className="text-xs p-1 rounded border border-border relative"
               style={{ 
-                backgroundColor: route.statusColor || '#f0f0f0', // Use a light gray default if no color
-                color: getContrastTextColor(route.statusColor || '#f0f0f0') // Ensure text is visible
+                backgroundColor: route.status_color || '#f0f0f0', // Use a light gray default if no color
+                color: getContrastTextColor(route.status_color || '#f0f0f0') // Ensure text is visible
               }}
             >
               <div className="flex items-center justify-between gap-1">
@@ -84,9 +84,9 @@ export function RouteEntry({
                   <div className="text-sm font-medium">
                     {route.mileage} mi • ${route.rate}
                   </div>
-                  {route.customerLoadNumber && (
+                  {route.customer_load_number && (
                     <div className="text-xs text-muted-foreground">
-                      Load #{route.customerLoadNumber}
+                      Load #{route.customer_load_number}
                     </div>
                   )}
                 </div>
@@ -117,9 +117,9 @@ export function RouteEntry({
               <div className="flex items-center justify-between mt-1">
                 <span>{route.mileage} mi</span>
                 
-                {route.customerLoadNumber && (
+                {route.customer_load_number && (
                   <div className="flex items-center">
-                    <span className="text-xs font-medium mr-1">#{route.customerLoadNumber}</span>
+                    <span className="text-xs font-medium mr-1">#{route.customer_load_number}</span>
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -127,7 +127,7 @@ export function RouteEntry({
                             variant="ghost" 
                             size="icon" 
                             className="h-4 w-4 p-0" 
-                            onClick={() => copyLoadNumber(route.id!, route.customerLoadNumber!)}
+                            onClick={() => copyLoadNumber(route.id!, route.customer_load_number!)}
                           >
                             {copiedLoadId === route.id ? (
                               <Check className="h-3 w-3" />
@@ -145,10 +145,10 @@ export function RouteEntry({
                 )}
               </div>
               
-              {route.soldFor && (
+              {route.sold_for && (
                 <div className="flex items-center justify-between mt-1 pt-1 border-t border-border/30">
-                  <span>Sold: {formatCurrency(route.soldFor)}</span>
-                  <span>Earn: {formatCurrency(route.rate - route.soldFor)}</span>
+                  <span>Sold: {formatCurrency(route.sold_for)}</span>
+                  <span>Earn: {formatCurrency(route.rate - route.sold_for)}</span>
                 </div>
               )}
               
@@ -162,7 +162,7 @@ export function RouteEntry({
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <div className="text-[10px] truncate">
-                          💬 {route.lastCommentBy ? `${route.lastCommentBy}: ` : ''}
+                          💬 {route.last_comment_by ? `${route.last_comment_by}: ` : ''}
                           {(() => {
                             try {
                               const comments = JSON.parse(route.comments);
@@ -203,7 +203,7 @@ export function RouteEntry({
                 <DialogTitle>Add New Route</DialogTitle>
               </DialogHeader>
               <RouteForm 
-                driverId={driverId} 
+                driver_id={driver_id} 
                 date={date} 
                 onSubmit={handleAddRoute} 
               />
@@ -217,7 +217,7 @@ export function RouteEntry({
               </DialogHeader>
               {editingRoute && (
                 <RouteForm 
-                  driverId={driverId} 
+                  driver_id={driver_id} 
                   date={date} 
                   route={editingRoute}
                   onSubmit={handleUpdateRoute} 
@@ -240,7 +240,7 @@ export function RouteEntry({
               <DialogTitle>Add New Route</DialogTitle>
             </DialogHeader>
             <RouteForm 
-              driverId={driverId} 
+              driver_id={driver_id} 
               date={date} 
               onSubmit={handleAddRoute} 
             />

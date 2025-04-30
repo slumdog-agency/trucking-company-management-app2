@@ -1,7 +1,11 @@
-const { Pool } = require('pg');
-const fs = require('fs').promises;
-const path = require('path');
-require('dotenv').config();
+import { Pool } from 'pg';
+import { promises as fs } from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import 'dotenv/config';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // PostgreSQL connection configuration
 const pool = new Pool({
@@ -94,12 +98,69 @@ async function applyMigration(filename) {
     // Split the content into statements using the new function
     const statements = splitSqlStatements(content);
     
-    // Execute each statement separately
+    // Group statements by type
+    const tableStatements = [];
+    const indexStatements = [];
+    const triggerStatements = [];
+    const otherStatements = [];
+    
     for (const statement of statements) {
+      const lowerStatement = statement.toLowerCase();
+      if (lowerStatement.includes('create table')) {
+        tableStatements.push(statement);
+      } else if (lowerStatement.includes('create index')) {
+        indexStatements.push(statement);
+      } else if (lowerStatement.includes('create trigger')) {
+        triggerStatements.push(statement);
+      } else {
+        otherStatements.push(statement);
+      }
+    }
+    
+    // Execute statements in order: tables, other statements, indexes, triggers
+    const orderedStatements = [
+      ...tableStatements,
+      ...otherStatements,
+      ...indexStatements,
+      ...triggerStatements
+    ];
+    
+    // Execute each statement separately
+    for (const statement of orderedStatements) {
       try {
+        // Skip trigger creation if it already exists
+        if (statement.toLowerCase().includes('create trigger')) {
+          const triggerMatch = statement.match(/create trigger\s+(\w+)\s+on\s+(\w+)/i);
+          if (triggerMatch) {
+            const [, triggerName, tableName] = triggerMatch;
+            const checkTrigger = await client.query(
+              `SELECT 1 FROM pg_trigger WHERE tgname = $1 AND tgrelid = (SELECT oid FROM pg_class WHERE relname = $2)`,
+              [triggerName, tableName]
+            );
+            if (checkTrigger.rows.length > 0) {
+              console.log(`Trigger ${triggerName} already exists on table ${tableName}, skipping...`);
+              continue;
+            }
+          }
+        }
+        
         console.log('Executing:', statement);
         await client.query(statement);
       } catch (error) {
+        // If it's a trigger already exists error, skip it
+        if (error.code === '42710' && error.message.includes('trigger')) {
+          console.log('Trigger already exists, skipping...');
+          continue;
+        }
+        
+        // If transaction is aborted, rollback and start a new transaction
+        if (error.code === '25P02') {
+          console.log('Transaction aborted, rolling back and starting new transaction...');
+          await client.query('ROLLBACK');
+          await client.query('BEGIN');
+          continue;
+        }
+        
         // Log the error and throw it
         console.error('Error executing statement:', error);
         throw error;
@@ -126,15 +187,27 @@ async function migrate() {
     const appliedMigrations = await getAppliedMigrations();
     console.log('Applied migrations:', appliedMigrations);
     
-    // We only have one migration file now
-    const migrationFile = '001_initial_schema.sql';
+    // Define all migration files in order
+    const migrationFiles = [
+      '001_initial_schema.sql',
+      '002_create_routes_and_divisions.sql',
+      '003_create_users_and_permissions.sql',
+      '004_update_schema.sql',
+      '005_weekly_routes_dashboard.sql',
+      '007_update_dispatcher_id.sql',
+      '008_create_route_tables.sql'
+    ];
     
-    if (!appliedMigrations.includes(migrationFile)) {
-      await applyMigration(migrationFile);
-      console.log('Initial schema migration completed successfully');
-    } else {
-      console.log('Schema is already up to date');
+    for (const migrationFile of migrationFiles) {
+      if (!appliedMigrations.includes(migrationFile)) {
+        await applyMigration(migrationFile);
+        console.log(`Successfully applied migration: ${migrationFile}`);
+      } else {
+        console.log(`Migration already applied: ${migrationFile}`);
+      }
     }
+    
+    console.log('All migrations completed successfully');
   } catch (error) {
     console.error('Migration failed:', error);
     process.exit(1);

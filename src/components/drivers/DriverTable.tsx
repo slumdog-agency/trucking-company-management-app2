@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DriverRow } from "./DriverRow";
 import { getWeekDays, formatCurrency, getAppSettings } from "@/lib/utils";
-import { fine } from "@/lib/fine";
 import { useToast } from "@/hooks/use-toast";
 import { 
   Download, 
@@ -30,6 +29,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { jsPDF } from "jspdf";
 import { useNavigate } from "react-router-dom";
+import { getDrivers, getRoutes, getTrucks, getTrailers, updateDriver, deleteDriver, addRoute, updateRoute, deleteRoute } from "@/lib/api";
 
 interface DriverTableProps {
   currentDate: Date;
@@ -49,12 +49,12 @@ export function DriverTable({ currentDate }: DriverTableProps) {
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<FilterType[]>([]);
   const [filterInput, setFilterInput] = useState("");
-  const [filterField, setFilterField] = useState("firstName");
+  const [filterField, setFilterField] = useState("first_name");
   const [activeFilters, setActiveFilters] = useState<string[]>([
     'count',
     'percentage',
-    'firstName',
-    'lastName',
+    'first_name',
+    'last_name',
     'phone',
     'dispatcher'
   ]);
@@ -62,7 +62,6 @@ export function DriverTable({ currentDate }: DriverTableProps) {
   const { toast } = useToast();
   const navigate = useNavigate();
   const weekDays = getWeekDays(currentDate);
-  const { data: session } = fine.auth.useSession();
   const tableRef = useRef<HTMLTableElement>(null);
   const [showWeeklyTotals, setShowWeeklyTotals] = useState(true);
 
@@ -80,34 +79,29 @@ export function DriverTable({ currentDate }: DriverTableProps) {
         const startDate = weekDays[0].fullDate;
         const endDate = weekDays[6].fullDate;
         
-        // Fetch drivers with their assigned equipment
-        const driversData = await fine.table("drivers").select();
+        // Fetch drivers
+        const driversData = await getDrivers();
         
-        // Sort drivers by count and ensure sequential counts
+        // Sort drivers by count
         const sortedDrivers = driversData ? [...driversData].sort((a, b) => a.count - b.count) : [];
-        
         setDrivers(sortedDrivers);
         
-        // Fetch trucks and trailers for assignment
-        const trucksData = await fine.table("trucks").select();
+        // Fetch trucks and trailers
+        const trucksData = await getTrucks();
         setTrucks(trucksData || []);
         
-        const trailersData = await fine.table("trailers").select();
+        const trailersData = await getTrailers();
         setTrailers(trailersData || []);
         
-        // Fetch routes for the current week
-        if (sortedDrivers.length > 0) {
-          // Instead of using gte and lte for date range
-          // For this demo, we'll fetch all routes and filter them in JavaScript
-          const allRoutes = await fine.table("routes").select();
-          
-          // Filter routes for the current week
-          const weekRoutes = allRoutes.filter(route => 
-            route.date >= startDate && route.date <= endDate
-          );
-          
-          setRoutes(weekRoutes || []);
-        }
+        // Fetch routes
+        const routesData = await getRoutes();
+        
+        // Filter routes for the current week
+        const weekRoutes = routesData.filter((route: Schema["routes"]) => 
+          route.date >= startDate && route.date <= endDate
+        );
+        
+        setRoutes(weekRoutes || []);
       } catch (error) {
         console.error("Error fetching data:", error);
         toast({
@@ -129,8 +123,8 @@ export function DriverTable({ currentDate }: DriverTableProps) {
     const fieldLabel = {
       count: "Count",
       percentage: "Percentage",
-      firstName: "First Name",
-      lastName: "Last Name",
+      first_name: "First Name",
+      last_name: "Last Name",
       phone: "Phone",
       dispatcher: "Dispatcher"
     }[filterField] || filterField;
@@ -166,16 +160,17 @@ export function DriverTable({ currentDate }: DriverTableProps) {
     });
   });
 
-  const addRoute = async (route: Schema["routes"]) => {
+  const handleAddRoute = async (route: Schema["routes"]) => {
     try {
-      const addedRoutes = await fine.table("routes").insert(route).select();
-      if (addedRoutes && addedRoutes.length > 0) {
-        setRoutes([...routes, addedRoutes[0]]);
-        toast({
-          title: "Success",
-          description: "Route added successfully.",
-        });
-      }
+      const addedRoute = await addRoute({
+        ...route,
+        last_comment_by: "System" // TODO: Replace with actual user name
+      });
+      setRoutes([...routes, addedRoute]);
+      toast({
+        title: "Success",
+        description: "Route added successfully.",
+      });
     } catch (error) {
       console.error("Error adding route:", error);
       toast({
@@ -186,17 +181,17 @@ export function DriverTable({ currentDate }: DriverTableProps) {
     }
   };
 
-  const updateRoute = async (id: number, route: Schema["routes"]) => {
+  const handleUpdateRoute = async (id: number, route: Schema["routes"]) => {
     try {
-      const updatedRoutes = await fine.table("routes").update(route).eq("id", id).select();
-      
-      if (updatedRoutes && updatedRoutes.length > 0) {
-        setRoutes(routes.map(r => r.id === id ? updatedRoutes[0] : r));
-        toast({
-          title: "Success",
-          description: "Route updated successfully.",
-        });
-      }
+      const updatedRoute = await updateRoute(id, {
+        ...route,
+        last_edited_by: "System" // TODO: Replace with actual user name
+      });
+      setRoutes(routes.map(r => r.id === id ? updatedRoute : r));
+      toast({
+        title: "Success",
+        description: "Route updated successfully.",
+      });
     } catch (error) {
       console.error("Error updating route:", error);
       toast({
@@ -207,11 +202,29 @@ export function DriverTable({ currentDate }: DriverTableProps) {
     }
   };
 
-  const updateDriver = async (id: number, data: Partial<Schema["drivers"]>) => {
+  const handleDeleteRoute = async (id: number) => {
     try {
-      await fine.table("drivers").update(data).eq("id", id);
+      await deleteRoute(id, "System"); // TODO: Replace with actual user name
+      setRoutes(routes.filter(r => r.id !== id));
+      toast({
+        title: "Success",
+        description: "Route deleted successfully.",
+      });
+    } catch (error) {
+      console.error("Error deleting route:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete route. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleUpdateDriver = async (id: number, data: Partial<Schema["drivers"]>) => {
+    try {
+      const updatedDriver = await updateDriver(id, data);
       setDrivers(drivers.map(driver => 
-        driver.id === id ? { ...driver, ...data } : driver
+        driver.id === id ? { ...driver, ...updatedDriver } : driver
       ));
       toast({
         title: "Success",
@@ -227,27 +240,10 @@ export function DriverTable({ currentDate }: DriverTableProps) {
     }
   };
 
-  const deleteDriver = async (id: number) => {
+  const handleDeleteDriver = async (id: number) => {
     try {
-      await fine.table("drivers").delete().eq("id", id);
-      
-      // Get remaining drivers and reorder their counts
-      const remainingDrivers = drivers.filter(driver => driver.id !== id);
-      
-      // Update counts to be sequential
-      const updatedDrivers = await Promise.all(
-        remainingDrivers.map(async (driver, index) => {
-          const newCount = index + 1;
-          if (driver.count !== newCount) {
-            await fine.table("drivers").update({ count: newCount }).eq("id", driver.id!);
-            return { ...driver, count: newCount };
-          }
-          return driver;
-        })
-      );
-      
-      setDrivers(updatedDrivers);
-      
+      await deleteDriver(id);
+      setDrivers(drivers.filter(d => d.id !== id));
       toast({
         title: "Success",
         description: "Driver deleted successfully.",
@@ -257,27 +253,6 @@ export function DriverTable({ currentDate }: DriverTableProps) {
       toast({
         title: "Error",
         description: "Failed to delete driver. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const deleteRoute = async (id: number) => {
-    try {
-      await fine.table("routes").delete().eq("id", id);
-      
-      // Update routes state
-      setRoutes(prev => prev.filter(route => route.id !== id));
-      
-      toast({
-        title: "Success",
-        description: "Route deleted successfully.",
-      });
-    } catch (error) {
-      console.error("Error deleting route:", error);
-      toast({
-        title: "Error",
-        description: "Failed to delete route. Please try again.",
         variant: "destructive",
       });
     }
@@ -299,7 +274,7 @@ export function DriverTable({ currentDate }: DriverTableProps) {
     ];
     
     const rows = filteredDrivers.map(driver => {
-      const driverRoutes = routes.filter(route => route.driverId === driver.id);
+      const driverRoutes = routes.filter(route => route.driver_id === driver.id);
       
       // Calculate weekly total gross
       const weeklyTotalGross = driverRoutes.reduce((total, route) => {
@@ -308,12 +283,12 @@ export function DriverTable({ currentDate }: DriverTableProps) {
       
       // Calculate gross difference
       const grossDifference = driverRoutes.reduce((total, route) => {
-        return total + (route.soldFor ? route.rate - route.soldFor : 0);
+        return total + (route.sold_for ? route.rate - route.sold_for : 0);
       }, 0);
       
       // Calculate percentage income
       const percentageIncome = driverRoutes.reduce((total, route) => {
-        return total + (route.soldFor ? route.soldFor * (driver.percentage / 100) : 0);
+        return total + (route.sold_for ? route.sold_for * (driver.percentage / 100) : 0);
       }, 0);
       
       // Calculate total earnings
@@ -325,16 +300,16 @@ export function DriverTable({ currentDate }: DriverTableProps) {
         if (dayRoutes.length === 0) return "";
         
         return dayRoutes.map(route => 
-          `${route.pickupState || ''}-${route.deliveryState || ''} $${route.rate}`
+          `${route.pickup_state || ''}-${route.delivery_state || ''} $${route.rate}`
         ).join("; ");
       });
       
       return [
         driver.count,
         `${driver.percentage}%`,
-        `${driver.firstName} ${driver.lastName}`,
+        `${driver.first_name} ${driver.last_name}`,
         driver.phone || "",
-        driver.dispatcher,
+        driver.dispatcher || "",
         ...dailyRoutes,
         `$${weeklyTotalGross.toFixed(2)}`,
         `$${grossDifference.toFixed(2)}`,
@@ -386,7 +361,7 @@ export function DriverTable({ currentDate }: DriverTableProps) {
       
       // Table data
       const data = filteredDrivers.map(driver => {
-        const driverRoutes = routes.filter(route => route.driverId === driver.id);
+        const driverRoutes = routes.filter(route => route.driver_id === driver.id);
         
         // Calculate weekly total gross
         const weeklyTotalGross = driverRoutes.reduce((total, route) => {
@@ -395,11 +370,11 @@ export function DriverTable({ currentDate }: DriverTableProps) {
         
         // Calculate total earnings
         const grossDifference = driverRoutes.reduce((total, route) => {
-          return total + (route.soldFor ? route.rate - route.soldFor : 0);
+          return total + (route.sold_for ? route.rate - route.sold_for : 0);
         }, 0);
         
         const percentageIncome = driverRoutes.reduce((total, route) => {
-          return total + (route.soldFor ? route.soldFor * (driver.percentage / 100) : 0);
+          return total + (route.sold_for ? route.sold_for * (driver.percentage / 100) : 0);
         }, 0);
         
         const totalEarnings = grossDifference + percentageIncome;
@@ -407,9 +382,9 @@ export function DriverTable({ currentDate }: DriverTableProps) {
         return [
           driver.count.toString(),
           `${driver.percentage}%`,
-          `${driver.firstName} ${driver.lastName}`,
+          `${driver.first_name} ${driver.last_name}`,
           driver.phone || "-",
-          driver.dispatcher,
+          driver.dispatcher || "-",
           formatCurrency(weeklyTotalGross),
           formatCurrency(totalEarnings)
         ];
@@ -461,10 +436,10 @@ export function DriverTable({ currentDate }: DriverTableProps) {
       // Calculate totals
       const totalGross = routes.reduce((total, route) => total + route.rate, 0);
       const totalEarnings = routes.reduce((total, route) => {
-        if (!route.soldFor) return total;
-        const driver = drivers.find(d => d.id === route.driverId);
-        const grossDiff = route.rate - route.soldFor;
-        const percentIncome = driver ? route.soldFor * (driver.percentage / 100) : 0;
+        if (!route.sold_for) return total;
+        const driver = drivers.find(d => d.id === route.driver_id);
+        const grossDiff = route.rate - route.sold_for;
+        const percentIncome = driver ? route.sold_for * (driver.percentage / 100) : 0;
         return total + grossDiff + percentIncome;
       }, 0);
       
@@ -519,8 +494,8 @@ export function DriverTable({ currentDate }: DriverTableProps) {
                     >
                       <option value="count">Count</option>
                       <option value="percentage">Percentage</option>
-                      <option value="firstName">First Name</option>
-                      <option value="lastName">Last Name</option>
+                      <option value="first_name">First Name</option>
+                      <option value="last_name">Last Name</option>
                       <option value="phone">Phone</option>
                       <option value="dispatcher">Dispatcher</option>
                     </select>
@@ -541,7 +516,7 @@ export function DriverTable({ currentDate }: DriverTableProps) {
               </DropdownMenuContent>
             </DropdownMenu>
             
-            <Popover open={isFilterMenuOpen} onOpenChange={setIsFilterMenuOpen}>
+            <Popover>
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm">
                   <SlidersHorizontal className="h-4 w-4 mr-1" />
@@ -570,19 +545,19 @@ export function DriverTable({ currentDate }: DriverTableProps) {
                     </div>
                     <div className="flex items-center space-x-2">
                       <Checkbox 
-                        id="column-firstName" 
-                        checked={activeFilters.includes('firstName')}
-                        onCheckedChange={() => toggleFilterField('firstName')}
+                        id="column-first_name" 
+                        checked={activeFilters.includes('first_name')}
+                        onCheckedChange={() => toggleFilterField('first_name')}
                       />
-                      <Label htmlFor="column-firstName">First Name</Label>
+                      <Label htmlFor="column-first_name">First Name</Label>
                     </div>
                     <div className="flex items-center space-x-2">
                       <Checkbox 
-                        id="column-lastName" 
-                        checked={activeFilters.includes('lastName')}
-                        onCheckedChange={() => toggleFilterField('lastName')}
+                        id="column-last_name" 
+                        checked={activeFilters.includes('last_name')}
+                        onCheckedChange={() => toggleFilterField('last_name')}
                       />
-                      <Label htmlFor="column-lastName">Last Name</Label>
+                      <Label htmlFor="column-last_name">Last Name</Label>
                     </div>
                     <div className="flex items-center space-x-2">
                       <Checkbox 
@@ -653,7 +628,7 @@ export function DriverTable({ currentDate }: DriverTableProps) {
               {activeFilters.includes('percentage') && (
                 <th className="p-2 text-left font-medium text-muted-foreground w-20">%</th>
               )}
-              {(activeFilters.includes('firstName') || activeFilters.includes('lastName')) && (
+              {(activeFilters.includes('first_name') || activeFilters.includes('last_name')) && (
                 <th className="p-2 text-left font-medium text-muted-foreground">Driver Name</th>
               )}
               {activeFilters.includes('phone') && (
@@ -676,10 +651,10 @@ export function DriverTable({ currentDate }: DriverTableProps) {
               
               {showWeeklyTotals && (
                 <>
-              <th className="p-2 text-right font-medium text-muted-foreground border-l border-border w-24">Total Gross</th>
-              <th className="p-2 text-right font-medium text-muted-foreground border-l border-border w-24">Gross Difference</th>
-              <th className="p-2 text-right font-medium text-muted-foreground border-l border-border w-24">Percentage Income</th>
-              <th className="p-2 text-right font-medium text-muted-foreground border-l border-border w-24">Total Earnings</th>
+                  <th className="p-2 text-right font-medium text-muted-foreground border-l border-border w-24">Total Gross</th>
+                  <th className="p-2 text-right font-medium text-muted-foreground border-l border-border w-24">Gross Difference</th>
+                  <th className="p-2 text-right font-medium text-muted-foreground border-l border-border w-24">Percentage Income</th>
+                  <th className="p-2 text-right font-medium text-muted-foreground border-l border-border w-24">Total Earnings</th>
                 </>
               )}
               <th className="p-2 text-right font-medium text-muted-foreground w-20">Actions</th>
@@ -694,30 +669,31 @@ export function DriverTable({ currentDate }: DriverTableProps) {
                 routes={routes}
                 trucks={trucks}
                 trailers={trailers}
-                onUpdateDriver={updateDriver}
-                onDeleteDriver={deleteDriver}
-                onAddRoute={addRoute}
-                onUpdateRoute={updateRoute}
-                onDeleteRoute={deleteRoute}
+                onUpdateDriver={handleUpdateDriver}
+                onDeleteDriver={handleDeleteDriver}
+                onAddRoute={handleAddRoute}
+                onUpdateRoute={handleUpdateRoute}
+                onDeleteRoute={handleDeleteRoute}
                 activeFilters={activeFilters}
                 onViewProfile={handleViewDriverProfile}
                 showWeeklyTotals={showWeeklyTotals}
               />
             ))}
           </tbody>
+          
           {showWeeklyTotals && (
-          <tfoot>
-            <tr className="bg-muted/50">
+            <tfoot>
+              <tr className="bg-muted/50">
                 {/* Individual cells for each filter column */}
                 {activeFilters.includes('count') && (
                   <td className="p-2 font-medium">
                     Total: {filteredDrivers.length}
-              </td>
+                  </td>
                 )}
                 {activeFilters.includes('percentage') && (
                   <td className="p-2"></td>
                 )}
-                {(activeFilters.includes('firstName') || activeFilters.includes('lastName')) && (
+                {(activeFilters.includes('first_name') || activeFilters.includes('last_name')) && (
                   <td className="p-2"></td>
                 )}
                 {activeFilters.includes('phone') && (
@@ -733,38 +709,38 @@ export function DriverTable({ currentDate }: DriverTableProps) {
                 ))}
                 
                 {/* Total Gross */}
-              <td className="p-2 text-right font-medium border-l border-border">
-                {formatCurrency(routes.reduce((total, route) => total + route.rate, 0))}
-              </td>
+                <td className="p-2 text-right font-medium border-l border-border">
+                  {formatCurrency(routes.reduce((total, route) => total + route.rate, 0))}
+                </td>
                 
                 {/* Gross Difference */}
-              <td className="p-2 text-right font-medium border-l border-border">
-                {formatCurrency(routes.reduce((total, route) => 
-                  total + (route.soldFor ? route.rate - route.soldFor : 0), 0))}
-              </td>
+                <td className="p-2 text-right font-medium border-l border-border">
+                  {formatCurrency(routes.reduce((total, route) => 
+                    total + (route.sold_for ? route.rate - route.sold_for : 0), 0))}
+                </td>
                 
                 {/* Percentage Income */}
-              <td className="p-2 text-right font-medium border-l border-border">
-                {formatCurrency(routes.reduce((total, route) => {
-                  const driver = drivers.find(d => d.id === route.driverId);
-                    return total + (route.soldFor && driver ? route.soldFor * (driver.percentage / 100) : 0);
-                }, 0))}
-              </td>
+                <td className="p-2 text-right font-medium border-l border-border">
+                  {formatCurrency(routes.reduce((total, route) => {
+                    const driver = drivers.find(d => d.id === route.driver_id);
+                    return total + (route.sold_for && driver ? route.sold_for * (driver.percentage / 100) : 0);
+                  }, 0))}
+                </td>
                 
                 {/* Total Earnings */}
-              <td className="p-2 text-right font-medium border-l border-border">
-                {formatCurrency(routes.reduce((total, route) => {
-                  const driver = drivers.find(d => d.id === route.driverId);
-                    const grossDiff = route.soldFor ? route.rate - route.soldFor : 0;
-                    const percentIncome = route.soldFor && driver ? route.soldFor * (driver.percentage / 100) : 0;
-                  return total + grossDiff + percentIncome;
-                }, 0))}
-              </td>
+                <td className="p-2 text-right font-medium border-l border-border">
+                  {formatCurrency(routes.reduce((total, route) => {
+                    const driver = drivers.find(d => d.id === route.driver_id);
+                    const grossDiff = route.sold_for ? route.rate - route.sold_for : 0;
+                    const percentIncome = route.sold_for && driver ? route.sold_for * (driver.percentage / 100) : 0;
+                    return total + grossDiff + percentIncome;
+                  }, 0))}
+                </td>
                 
                 {/* Empty cell for actions column */}
-              <td className="p-2"></td>
-            </tr>
-          </tfoot>
+                <td className="p-2"></td>
+              </tr>
+            </tfoot>
           )}
         </table>
       </div>

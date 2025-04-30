@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import routes from './routes.js';
+import weeklyRoutes from './routes/weekly-routes.js';
+import divisionsRoutes from './routes/divisions.js';
 import pool from './db.js';
 
 const app = express();
@@ -12,41 +14,39 @@ app.use(express.json());
 // Routes endpoints
 app.use('/api/routes', routes);
 
-// Divisions endpoints
-app.get('/api/divisions', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM divisions ORDER BY name');
-    res.json(result.rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+// Weekly routes endpoints
+app.use('/api/weekly-routes', weeklyRoutes);
 
-app.post('/api/divisions', async (req, res) => {
-  try {
-    const { name, description, mc, dot, address, phone_number } = req.body;
-    const result = await pool.query(
-      `INSERT INTO divisions (name, description, mc, dot, address, phone_number)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [name, description, mc, dot, address, phone_number]
-    );
-    res.status(201).json(result.rows[0]);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+// Divisions endpoints
+app.use('/api/divisions', divisionsRoutes);
 
 // Drivers endpoints
 app.get('/api/drivers', async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT d.*,
-             CONCAT(disp.first_name, ' ', disp.last_name) as dispatcher_name
+      SELECT 
+        d.id,
+        d.count,
+        d.percentage,
+        d.first_name,
+        d.last_name,
+        d.email,
+        d.phone,
+        d.dispatcher_id,
+        d.truck,
+        d.trailer,
+        d.emergency_contact_name,
+        d.emergency_contact_phone,
+        d.category,
+        d.created_at,
+        d.updated_at,
+        CONCAT(disp.first_name, ' ', disp.last_name) as dispatcher
       FROM drivers d
-      LEFT JOIN dispatchers disp ON d.dispatcher_id = disp.id
+      LEFT JOIN dispatchers disp ON disp.dispatcher_id = d.dispatcher_id
       ORDER BY d.last_name, d.first_name`);
     res.json(result.rows);
   } catch (err) {
+    console.error('Error in /api/drivers:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -62,12 +62,34 @@ app.post('/api/drivers', async (req, res) => {
     } = req.body;
     
     const result = await pool.query(
-      `INSERT INTO drivers (
-        first_name, last_name, email, phone,
-        count, percentage, dispatcher_id,
-        truck, trailer, emergency_contact_name,
-        emergency_contact_phone, category
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
+      `WITH inserted_driver AS (
+        INSERT INTO drivers (
+          first_name, last_name, email, phone,
+          count, percentage, dispatcher_id,
+          truck, trailer, emergency_contact_name,
+          emergency_contact_phone, category
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        RETURNING *
+      )
+      SELECT 
+        d.id,
+        d.count,
+        d.percentage,
+        d.first_name,
+        d.last_name,
+        d.email,
+        d.phone,
+        d.dispatcher_id,
+        d.truck,
+        d.trailer,
+        d.emergency_contact_name,
+        d.emergency_contact_phone,
+        d.category,
+        d.created_at,
+        d.updated_at,
+        CONCAT(disp.first_name, ' ', disp.last_name) as dispatcher
+      FROM inserted_driver d
+      LEFT JOIN dispatchers disp ON disp.dispatcher_id = d.dispatcher_id`,
       [
         first_name, last_name, email, phone,
         count, percentage, dispatcher_id,
@@ -77,6 +99,7 @@ app.post('/api/drivers', async (req, res) => {
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
+    console.error('Error in POST /api/drivers:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -93,13 +116,35 @@ app.put('/api/drivers/:id', async (req, res) => {
     } = req.body;
     
     const result = await pool.query(
-      `UPDATE drivers SET 
-        first_name = $1, last_name = $2, email = $3, phone = $4,
-        count = $5, percentage = $6, dispatcher_id = $7,
-        truck = $8, trailer = $9, emergency_contact_name = $10,
-        emergency_contact_phone = $11, category = $12,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = $13 RETURNING *`,
+      `WITH updated_driver AS (
+        UPDATE drivers SET 
+          first_name = $1, last_name = $2, email = $3, phone = $4,
+          count = $5, percentage = $6, dispatcher_id = $7,
+          truck = $8, trailer = $9, emergency_contact_name = $10,
+          emergency_contact_phone = $11, category = $12,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $13
+        RETURNING *
+      )
+      SELECT 
+        d.id,
+        d.count,
+        d.percentage,
+        d.first_name,
+        d.last_name,
+        d.email,
+        d.phone,
+        d.dispatcher_id,
+        d.truck,
+        d.trailer,
+        d.emergency_contact_name,
+        d.emergency_contact_phone,
+        d.category,
+        d.created_at,
+        d.updated_at,
+        CONCAT(disp.first_name, ' ', disp.last_name) as dispatcher
+      FROM updated_driver d
+      LEFT JOIN dispatchers disp ON disp.dispatcher_id = d.dispatcher_id`,
       [
         first_name, last_name, email, phone,
         count, percentage, dispatcher_id,
@@ -112,6 +157,7 @@ app.put('/api/drivers/:id', async (req, res) => {
     }
     res.json(result.rows[0]);
   } catch (err) {
+    console.error('Error in PUT /api/drivers/:id:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -157,7 +203,10 @@ app.post('/api/dispatchers', async (req, res) => {
 // Route statuses endpoints
 app.get('/api/route-statuses', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM route_statuses ORDER BY sort_order');
+    const result = await pool.query(`
+      SELECT * FROM route_statuses 
+      ORDER BY sort_order, name
+    `);
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -502,6 +551,97 @@ app.delete('/api/user-permissions/:id', async (req, res) => {
     res.json({ message: 'Permission deleted successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Get ZIP code details
+app.get('/api/zip-codes/:zip', async (req, res) => {
+  try {
+    const { zip } = req.params;
+    const result = await pool.query(`
+      SELECT * FROM zip_codes 
+      WHERE zip_code = $1
+    `, [zip]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'ZIP code not found' });
+    }
+    
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Calculate mileage between ZIP codes
+app.post('/api/calculate-mileage', async (req, res) => {
+  try {
+    const { pickup_zip, delivery_zip } = req.body;
+    
+    // Get coordinates for both ZIP codes
+    const [pickupResult, deliveryResult] = await Promise.all([
+      pool.query('SELECT lat, lng FROM zip_codes WHERE zip_code = $1', [pickup_zip]),
+      pool.query('SELECT lat, lng FROM zip_codes WHERE zip_code = $1', [delivery_zip])
+    ]);
+    
+    if (pickupResult.rows.length === 0 || deliveryResult.rows.length === 0) {
+      return res.status(404).json({ error: 'One or both ZIP codes not found' });
+    }
+    
+    const pickup = pickupResult.rows[0];
+    const delivery = deliveryResult.rows[0];
+    
+    // Calculate distance using Haversine formula
+    const R = 3959; // Earth's radius in miles
+    const lat1 = pickup.lat * Math.PI / 180;
+    const lat2 = delivery.lat * Math.PI / 180;
+    const dLat = (delivery.lat - pickup.lat) * Math.PI / 180;
+    const dLon = (delivery.lng - pickup.lng) * Math.PI / 180;
+    
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1) * Math.cos(lat2) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const distance = Math.round(R * c);
+    
+    res.json({ mileage: distance });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Add route comment
+app.post('/api/routes/:id/comments', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    
+    const { id } = req.params;
+    const { text, by } = req.body;
+    
+    // Add comment
+    const commentResult = await client.query(`
+      INSERT INTO route_comments (route_id, text, by)
+      VALUES ($1, $2, $3)
+      RETURNING *
+    `, [id, text, by]);
+    
+    // Update route's last comment info
+    await client.query(`
+      UPDATE routes SET
+        last_comment_by = $1,
+        last_comment_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+    `, [by, id]);
+    
+    await client.query('COMMIT');
+    res.status(201).json(commentResult.rows[0]);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
   }
 });
 

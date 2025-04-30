@@ -196,11 +196,11 @@ export default function AddDriverPage() {
   };
 
   const handleDispatcherChange = (value: string) => {
-    const selectedDispatcher = dispatchers.find(d => d.id === parseInt(value));
+    const selectedDispatcher = dispatchers.find(d => d.dispatcher_id === parseInt(value));
     if (selectedDispatcher) {
       setFormData(prev => ({
         ...prev,
-        dispatcher_id: selectedDispatcher.id,
+        dispatcher_id: selectedDispatcher.dispatcher_id,
         first_name: selectedDispatcher.first_name,
         last_name: selectedDispatcher.last_name
       }));
@@ -492,7 +492,7 @@ export default function AddDriverPage() {
                           </SelectTrigger>
                           <SelectContent>
                             {dispatchers.map((dispatcher) => (
-                              <SelectItem key={dispatcher.id} value={dispatcher.id?.toString() || ""}>
+                              <SelectItem key={dispatcher.dispatcher_id} value={dispatcher.dispatcher_id?.toString() || ""}>
                                 {dispatcher.first_name} {dispatcher.last_name}
                               </SelectItem>
                             ))}

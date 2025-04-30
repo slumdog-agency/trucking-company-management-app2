@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Schema } from "@/lib/db-types";
 import { useToast } from "@/hooks/use-toast";
-import { Edit2, Save, Trash2, Plus, Search } from "lucide-react";
+import { Edit2, Save, Trash2, Plus, Search, X } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -21,20 +21,32 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getDrivers, updateDriver, deleteDriver } from '@/lib/api';
+import { getDrivers, updateDriver, deleteDriver, getDispatchers, addDriver } from '@/lib/api';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 export default function DriversPage() {
   const [drivers, setDrivers] = useState<Schema["drivers"][]>([]);
+  const [dispatchers, setDispatchers] = useState<Schema["dispatchers"][]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [editForm, setEditForm] = useState<Schema["drivers"] | null>(null);
+  const [editForm, setEditForm] = useState<Partial<Schema["drivers"]> | null>(null);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const { toast } = useToast();
 
   const fetchDrivers = async () => {
     setLoading(true);
     try {
-      const driversData = await getDrivers();
+      const [driversData, dispatchersData] = await Promise.all([
+        getDrivers(),
+        getDispatchers()
+      ]);
       console.log('Fetched drivers data:', driversData);
       // Ensure we have all required fields
       const validatedData = (driversData || []).map(driver => ({
@@ -46,6 +58,7 @@ export default function DriversPage() {
         truck: driver.truck || ''
       }));
       setDrivers(validatedData);
+      setDispatchers(dispatchersData || []);
     } catch (error) {
       console.error("Error fetching data:", error);
       toast({
@@ -60,52 +73,27 @@ export default function DriversPage() {
 
   useEffect(() => {
     fetchDrivers();
-  }, []);
+  }, [toast]);
 
-  const handleEdit = (driver: Schema['drivers']) => {
-    setEditingId(driver.id!);
-    setEditForm({
-      ...driver,
-      emergency_contact_name: driver.emergency_contact_name || '',
-      emergency_contact_phone: driver.emergency_contact_phone || '',
-      first_name: driver.first_name || '',
-      last_name: driver.last_name || '',
-      email: driver.email || '',
-      phone: driver.phone || '',
-      truck: driver.truck || '',
-      trailer: driver.trailer || '',
-      count: driver.count || 0,
-      percentage: driver.percentage || 0,
-      dispatcher_id: driver.dispatcher_id || null
-    });
+  const handleEdit = (driver: Schema["drivers"]) => {
+    setEditingId(driver.id || null);
+    setEditForm(driver);
   };
 
   const handleSave = async () => {
     if (!editForm || !editingId) return;
+
     try {
-      await updateDriver(editingId, {
-        first_name: editForm.first_name,
-        last_name: editForm.last_name,
-        dispatcher_id: editForm.dispatcher_id,
-        truck: editForm.truck,
-        trailer: editForm.trailer,
-        phone: editForm.phone,
-        emergency_contact_name: editForm.emergency_contact_name,
-        emergency_contact_phone: editForm.emergency_contact_phone,
-        email: editForm.email,
-        category: editForm.category,
-        count: editForm.count,
-        percentage: editForm.percentage
-      });
+      const updatedDriver = await updateDriver(editingId, editForm);
+      setDrivers(drivers.map(d => d.id === editingId ? updatedDriver : d));
       setEditingId(null);
       setEditForm(null);
-      await fetchDrivers();
       toast({
         title: "Success",
         description: "Driver updated successfully.",
       });
     } catch (error) {
-      console.error('Error updating driver:', error);
+      console.error("Error updating driver:", error);
       toast({
         title: "Error",
         description: "Failed to update driver. Please try again.",
@@ -134,20 +122,57 @@ export default function DriversPage() {
     }
   };
 
+  const handleAdd = async (data: Partial<Schema["drivers"]>) => {
+    try {
+      const newDriver = await addDriver(data);
+      setDrivers([...drivers, newDriver]);
+      setIsAddDialogOpen(false);
+      toast({
+        title: "Success",
+        description: "Driver added successfully.",
+      });
+    } catch (error) {
+      console.error("Error adding driver:", error);
+      toast({
+        title: "Error",
+        description: "Failed to add driver. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!editForm) return;
-    
     const { name, value } = e.target;
-    setEditForm({
-      ...editForm,
-      [name]: name === 'count' || name === 'percentage' ? parseFloat(value) : value
-    });
+    setEditForm(prev => prev ? ({
+      ...prev,
+      [name]: value
+    }) : null);
+  };
+
+  const handleDispatcherChange = (value: string) => {
+    const selectedDispatcher = dispatchers.find(d => d.dispatcher_id === parseInt(value));
+    
+    if (selectedDispatcher) {
+      setEditForm(prev => prev ? ({
+        ...prev,
+        dispatcher_id: selectedDispatcher.dispatcher_id,
+        dispatcher: `${selectedDispatcher.first_name} ${selectedDispatcher.last_name}`
+      }) : null);
+    }
   };
 
   const filteredDrivers = drivers.filter(driver => {
-    const fullName = `${driver.first_name || ''} ${driver.last_name || ''}`.toLowerCase();
-    return fullName.includes(searchTerm.toLowerCase()) || 
-           ((driver.truck || '').toLowerCase().includes(searchTerm.toLowerCase()));
+    if (!searchTerm) return true;
+    
+    const searchFields = [
+      driver.first_name,
+      driver.last_name,
+      driver.email,
+      driver.phone,
+      driver.dispatcher
+    ].map(field => (field || "").toLowerCase());
+    
+    return searchFields.some(field => field.includes(searchTerm.toLowerCase()));
   });
 
   return (
@@ -197,6 +222,7 @@ export default function DriversPage() {
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Phone</TableHead>
+                  <TableHead>Dispatcher</TableHead>
                   <TableHead>Truck</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -204,7 +230,7 @@ export default function DriversPage() {
               <TableBody>
                 {filteredDrivers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8">
+                    <TableCell colSpan={7} className="text-center py-8">
                       No drivers found
                     </TableCell>
                   </TableRow>
@@ -255,6 +281,27 @@ export default function DriversPage() {
                       </TableCell>
                       <TableCell>
                         {editingId === driver.id ? (
+                          <Select 
+                            defaultValue={driver.dispatcher_id?.toString()} 
+                            onValueChange={handleDispatcherChange}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a dispatcher" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {dispatchers.map((dispatcher) => (
+                                <SelectItem key={dispatcher.dispatcher_id} value={dispatcher.dispatcher_id?.toString() || ""}>
+                                  {dispatcher.first_name} {dispatcher.last_name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          driver.dispatcher
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {editingId === driver.id ? (
                           <Input
                             name="truck"
                             value={editForm?.truck}
@@ -266,25 +313,23 @@ export default function DriversPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         {editingId === driver.id ? (
-                          <Button onClick={handleSave} size="sm">
-                            <Save className="h-4 w-4 mr-1" />
-                            Save
-                          </Button>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button size="sm" variant="ghost" onClick={handleSave}>
+                              <Save className="h-4 w-4" />
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => {
+                              setEditingId(null);
+                              setEditForm(null);
+                            }}>
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
                         ) : (
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              onClick={() => handleEdit(driver)}
-                              variant="outline"
-                              size="sm"
-                            >
+                          <div className="flex items-center justify-end gap-1">
+                            <Button size="sm" variant="ghost" onClick={() => handleEdit(driver)}>
                               <Edit2 className="h-4 w-4" />
                             </Button>
-                            <Button
-                              onClick={() => handleDelete(driver.id!)}
-                              variant="outline"
-                              size="sm"
-                              className="text-destructive"
-                            >
+                            <Button size="sm" variant="ghost" onClick={() => driver.id && handleDelete(driver.id)}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>

@@ -37,6 +37,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { getRoutes, getRoute, addRoute, updateRoute, getDivisions } from "@/lib/api";
+import { fine } from "@/lib/fine";
 
 interface RouteFormProps {
   driverId: number;
@@ -60,6 +61,8 @@ interface CityOption {
 }
 
 export function RouteForm({ driverId, date, route, onSubmit, isEditing = false }: RouteFormProps) {
+  const { data: session } = fine.auth.useSession();
+  const userName = session?.user?.name || session?.user?.email || "Unknown user";
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState<Partial<Schema["routes"]>>({
       driverId,
@@ -369,7 +372,7 @@ export function RouteForm({ driverId, date, route, onSubmit, isEditing = false }
     
     const comment: RouteComment = {
       text: newComment.trim(),
-      by: "Unknown user",
+      by: userName,
       at: new Date().toISOString()
     };
     
@@ -466,29 +469,31 @@ export function RouteForm({ driverId, date, route, onSubmit, isEditing = false }
     setIsLoading(true);
 
     try {
-      // Prepare route data
-      const routeData: Schema["routes"] = {
-        driverId,
+      // Prepare route data with snake_case keys for API
+      const routeData = {
+        driver_id: driverId,
         date,
-        pickupZip: formData.pickupZip || "",
-        pickupCity: formData.pickupCity || "",
-        pickupState: formData.pickupState || "",
-        pickupCounty: formData.pickupCounty || "",
-        deliveryZip: formData.deliveryZip || "",
-        deliveryCity: formData.deliveryCity || "",
-        deliveryState: formData.deliveryState || "",
-        deliveryCounty: formData.deliveryCounty || "",
+        pickup_zip: formData.pickupZip || "",
+        pickup_city: formData.pickupCity || "",
+        pickup_state: formData.pickupState || "",
+        pickup_county: formData.pickupCounty || "",
+        delivery_zip: formData.deliveryZip || "",
+        delivery_city: formData.deliveryCity || "",
+        delivery_state: formData.deliveryState || "",
+        delivery_county: formData.deliveryCounty || "",
         mileage: formData.mileage || 0,
         rate: formData.rate || 0,
-        soldFor: formData.soldFor || 0,
+        sold_for: formData.soldFor || 0,
         status: formData.status || "Empty",
-        statusColor: formData.statusColor || "#FF9E44",
-        customerLoadNumber: formData.customerLoadNumber || "",
-        divisionId: formData.divisionId || null,
+        status_color: formData.statusColor || "#FF9E44",
+        customer_load_number: formData.customerLoadNumber || "",
+        division_id: formData.divisionId || null,
         comments: JSON.stringify(comments),
-        previousRouteIds: JSON.stringify(selectedPreviousRoutes),
-        lastEditedBy: "Unknown user",
-        lastEditedAt: new Date().toISOString()
+        previous_route_ids: JSON.stringify(selectedPreviousRoutes),
+        last_edited_by: userName,
+        last_edited_at: new Date().toISOString(),
+        last_comment_by: userName,
+        last_comment_at: new Date().toISOString()
       };
 
       if (isEditing && route?.id) {
@@ -501,58 +506,14 @@ export function RouteForm({ driverId, date, route, onSubmit, isEditing = false }
           Object.keys(changedFields).map(field => [field, routeData[field]])
         );
 
-        // Ensure all required fields for update
-        const updateData = {
-          ...routeData,
-          id: route.id,
-          pickupCity: routeData.pickupCity || "",
-          pickupState: routeData.pickupState || "",
-          pickupCounty: routeData.pickupCounty || "",
-          deliveryCity: routeData.deliveryCity || "",
-          deliveryState: routeData.deliveryState || "",
-          deliveryCounty: routeData.deliveryCounty || "",
-          mileage: routeData.mileage || 0,
-          rate: routeData.rate || 0,
-          soldFor: routeData.soldFor || 0,
-          status: routeData.status || "Empty",
-          statusColor: routeData.statusColor || "#FF9E44",
-          customerLoadNumber: routeData.customerLoadNumber || "",
-          divisionId: routeData.divisionId || null,
-          comments: routeData.comments || "[]",
-          previousRouteIds: routeData.previousRouteIds || "[]",
-          lastEditedBy: routeData.lastEditedBy || "Unknown user",
-          lastEditedAt: routeData.lastEditedAt || new Date().toISOString(),
-        };
-        await updateRoute(route.id, updateData);
+        await updateRoute(route.id, routeData);
         toast({
           title: "Route updated",
           description: "The route has been updated successfully.",
         });
       } else {
-        // Create new route (remove id if present)
-        const { id, ...newRouteData } = routeData;
-        // Ensure all required fields for add
-        const addData: NewRoute = {
-          ...newRouteData,
-          pickupCity: newRouteData.pickupCity || "",
-          pickupState: newRouteData.pickupState || "",
-          pickupCounty: newRouteData.pickupCounty || "",
-          deliveryCity: newRouteData.deliveryCity || "",
-          deliveryState: newRouteData.deliveryState || "",
-          deliveryCounty: newRouteData.deliveryCounty || "",
-          mileage: newRouteData.mileage || 0,
-          rate: newRouteData.rate || 0,
-          soldFor: newRouteData.soldFor || 0,
-          status: newRouteData.status || "Empty",
-          statusColor: newRouteData.statusColor || "#FF9E44",
-          customerLoadNumber: newRouteData.customerLoadNumber || "",
-          divisionId: newRouteData.divisionId || null,
-          comments: newRouteData.comments || "[]",
-          previousRouteIds: newRouteData.previousRouteIds || "[]",
-          lastEditedBy: newRouteData.lastEditedBy || "Unknown user",
-          lastEditedAt: newRouteData.lastEditedAt || new Date().toISOString(),
-        };
-        const result = await addRoute(addData);
+        // Create new route
+        const result = await addRoute(routeData);
 
         if (!result || result.length === 0) {
           throw new Error("Failed to create route");
@@ -561,15 +522,41 @@ export function RouteForm({ driverId, date, route, onSubmit, isEditing = false }
         toast({
           title: "Route created",
           description: "The new route has been created successfully.",
-          });
+        });
       }
 
-      await onSubmit(routeData);
-    } catch (error) {
-      console.error("Error saving route:", error);
+      // Convert back to camelCase for the form submission
+      const submissionData: Schema["routes"] = {
+        id: route?.id || 0, // Use 0 for new routes
+        driverId: routeData.driver_id,
+        date: routeData.date,
+        pickupZip: routeData.pickup_zip,
+        pickupCity: routeData.pickup_city,
+        pickupState: routeData.pickup_state,
+        pickupCounty: routeData.pickup_county,
+        deliveryZip: routeData.delivery_zip,
+        deliveryCity: routeData.delivery_city,
+        deliveryState: routeData.delivery_state,
+        deliveryCounty: routeData.delivery_county,
+        mileage: routeData.mileage,
+        rate: routeData.rate,
+        soldFor: routeData.sold_for,
+        status: routeData.status,
+        statusColor: routeData.status_color,
+        customerLoadNumber: routeData.customer_load_number,
+        divisionId: routeData.division_id,
+        comments: routeData.comments,
+        previousRouteIds: routeData.previous_route_ids,
+        lastEditedBy: routeData.last_edited_by,
+        lastEditedAt: routeData.last_edited_at
+      };
+
+      await onSubmit(submissionData);
+    } catch (err) {
+      console.error("Error saving route:", err);
       toast({
         title: "Error",
-        description: `There was an error saving the route. Please try again.\n${error instanceof Error ? error.message : String(error)}`,
+        description: `There was an error saving the route. Please try again.\n${err instanceof Error ? err.message : String(err)}`,
         variant: "destructive",
       });
     } finally {

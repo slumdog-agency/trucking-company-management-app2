@@ -2,10 +2,10 @@ import { useState, useEffect } from "react";
 import { Schema } from "@/lib/db-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Edit2, Save, Trash2, Phone } from "lucide-react";
+import { Edit2, Save, Trash2, Phone, X } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { RouteEntry } from "@/components/routes/RouteEntry";
-import { fine } from "@/lib/fine";
+import { getDispatchers } from "@/lib/api";
 import {
   Select,
   SelectContent,
@@ -57,7 +57,7 @@ export function DriverRow({
       const fetchDispatchers = async () => {
         setLoadingDispatchers(true);
         try {
-          const data = await fine.table("dispatchers").select();
+          const data = await getDispatchers();
           setDispatchers(data || []);
         } catch (error) {
           console.error("Error fetching dispatchers:", error);
@@ -79,13 +79,13 @@ export function DriverRow({
   };
 
   const handleDispatcherChange = (value: string) => {
-    const selectedDispatcher = dispatchers.find(d => d.id === parseInt(value));
+    const selectedDispatcher = dispatchers.find(d => d.dispatcher_id === parseInt(value));
     
     if (selectedDispatcher) {
       setEditedDriver(prev => ({
         ...prev,
-        dispatcherId: selectedDispatcher.id,
-        dispatcher: `${selectedDispatcher.firstName} ${selectedDispatcher.lastName}`
+        dispatcher_id: selectedDispatcher.dispatcher_id,
+        dispatcher: `${selectedDispatcher.first_name} ${selectedDispatcher.last_name}`
       }));
     }
   };
@@ -110,7 +110,7 @@ export function DriverRow({
   };
 
   // Filter routes for this driver
-  const driverRoutes = routes.filter(route => route.driverId === driver.id);
+  const driverRoutes = routes.filter(route => route.driver_id === driver.id);
 
   // Calculate weekly total gross - sum of all route rates
   const weeklyTotalGross = driverRoutes.reduce((total, route) => {
@@ -124,12 +124,12 @@ export function DriverRow({
 
   // Calculate gross difference
   const grossDifference = driverRoutes.reduce((total, route) => {
-    return total + (route.soldFor ? route.rate - route.soldFor : 0);
+    return total + (route.sold_for ? route.rate - route.sold_for : 0);
   }, 0);
   
   // Calculate percentage income
   const percentageIncome = driverRoutes.reduce((total, route) => {
-    return total + (route.soldFor ? route.soldFor * (driver.percentage / 100) : 0);
+    return total + (route.sold_for ? route.sold_for * (driver.percentage / 100) : 0);
   }, 0);
   
   // Calculate total earnings
@@ -146,14 +146,42 @@ export function DriverRow({
         <td className="p-2 text-center">{driver.percentage}%</td>
       )}
       
-      {(activeFilters.includes('firstName') || activeFilters.includes('lastName')) && (
+      {(activeFilters.includes('first_name') || activeFilters.includes('last_name')) && (
         <td className="p-2">
           <button 
             onClick={() => driver.id && onViewProfile(driver.id)}
             className="text-primary hover:underline font-medium"
           >
-            {driver.firstName} {driver.lastName}
+            {driver.first_name} {driver.last_name}
           </button>
+        </td>
+      )}
+      
+      {activeFilters.includes('dispatcher') && (
+        <td className="p-2">
+          {isEditing ? (
+            loadingDispatchers ? (
+              <div className="h-8 flex items-center">Loading...</div>
+            ) : (
+              <Select 
+                defaultValue={driver.dispatcher_id?.toString()} 
+                onValueChange={handleDispatcherChange}
+              >
+                <SelectTrigger className="h-8">
+                  <SelectValue placeholder="Select a dispatcher" />
+                </SelectTrigger>
+                <SelectContent>
+                  {dispatchers.map((dispatcher) => (
+                    <SelectItem key={dispatcher.dispatcher_id} value={dispatcher.dispatcher_id?.toString() || ""}>
+                      {dispatcher.first_name} {dispatcher.last_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )
+          ) : (
+            driver.dispatcher || "-"
+          )}
         </td>
       )}
       
@@ -173,34 +201,6 @@ export function DriverRow({
         </td>
       )}
       
-      {activeFilters.includes('dispatcher') && (
-        <td className="p-2">
-          {isEditing ? (
-            loadingDispatchers ? (
-              <div className="h-8 flex items-center">Loading...</div>
-            ) : (
-              <Select 
-                defaultValue={driver.dispatcherId?.toString()} 
-                onValueChange={handleDispatcherChange}
-              >
-                <SelectTrigger className="h-8">
-                  <SelectValue placeholder="Select a dispatcher" />
-                </SelectTrigger>
-                <SelectContent>
-                  {dispatchers.map((dispatcher) => (
-                    <SelectItem key={dispatcher.id} value={dispatcher.id?.toString() || ""}>
-                      {dispatcher.firstName} {dispatcher.lastName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )
-          ) : (
-            driver.dispatcher
-          )}
-        </td>
-      )}
-      
       {/* Days of the week */}
       {weekDays.map((day) => {
         const dayRoutes = driverRoutes.filter(route => 
@@ -210,7 +210,7 @@ export function DriverRow({
         return (
           <td key={day.fullDate} className={`p-1 border-l border-border ${day.isToday ? 'bg-muted/30' : ''}`}>
             <RouteEntry 
-              driverId={driver.id || 0} 
+              driver_id={driver.id || 0} 
               date={day.fullDate}
               routes={dayRoutes}
               onAddRoute={onAddRoute}
@@ -248,11 +248,16 @@ export function DriverRow({
       {/* Actions */}
       <td className="p-2 text-right">
         {isEditing ? (
-          <Button size="sm" variant="ghost" onClick={handleSave}>
-            <Save className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center justify-end gap-1">
+            <Button size="sm" variant="ghost" onClick={handleSave}>
+              <Save className="h-4 w-4" />
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setIsEditing(false)}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
         ) : (
-          <div className="flex justify-end gap-1">
+          <div className="flex items-center justify-end gap-1">
             <Button size="sm" variant="ghost" onClick={() => setIsEditing(true)}>
               <Edit2 className="h-4 w-4" />
             </Button>

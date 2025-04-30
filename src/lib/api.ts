@@ -352,4 +352,21 @@ export async function deleteUserPermission(id: number) {
   return res.json();
 }
 
+// ZIP Code API
+export async function getZipCodeDetails(zip: string) {
+  const res = await fetch(`${API_BASE}/zip-codes/${zip}`);
+  if (!res.ok) throw new Error('Failed to fetch ZIP code details');
+  return res.json();
+}
+
+export async function calculateMileage(pickup_zip: string, delivery_zip: string) {
+  const res = await fetch(`${API_BASE}/calculate-mileage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pickup_zip, delivery_zip })
+  });
+  if (!res.ok) throw new Error('Failed to calculate mileage');
+  return res.json();
+}
+
 // Add similar functions for trucks, trailers, dispatchers, divisions, users as needed. 

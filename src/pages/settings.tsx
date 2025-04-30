@@ -793,7 +793,7 @@ export default function SettingsPage() {
                         ) : (
                           divisions
                             .filter(division => 
-                              division.name.toLowerCase().includes(divisionSearchTerm.toLowerCase()) ||
+                              (division.name?.toLowerCase() || '').includes(divisionSearchTerm.toLowerCase()) ||
                               (division.mc?.toLowerCase() || '').includes(divisionSearchTerm.toLowerCase()) ||
                               (division.dot?.toLowerCase() || '').includes(divisionSearchTerm.toLowerCase())
                             )
@@ -1082,7 +1082,7 @@ export default function SettingsPage() {
                               <TableRow key={status.id}>
                                 <TableCell className="font-medium">{status.name}</TableCell>
                                 <TableCell>
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-2" key={`color-${status.id}`}>
                                     <div 
                                       className="w-6 h-6 rounded border"
                                       style={{ backgroundColor: status.color }}
@@ -1092,7 +1092,7 @@ export default function SettingsPage() {
                                 </TableCell>
                                 <TableCell>{status.is_default ? "Yes" : "No"}</TableCell>
                                 <TableCell>
-                                  <div className="flex items-center gap-1">
+                                  <div className="flex items-center gap-1" key={`order-${status.id}`}>
                                     <Button
                                       size="sm"
                                       variant="ghost"

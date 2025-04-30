@@ -24,10 +24,10 @@ CREATE TABLE IF NOT EXISTS user_permissions (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create zip_codes table
-CREATE TABLE IF NOT EXISTS zip_codes (
+-- Create zipCodes table
+CREATE TABLE IF NOT EXISTS "zipCodes" (
     id SERIAL PRIMARY KEY,
-    zip_code TEXT NOT NULL,
+    "zipCode" TEXT NOT NULL,
     city TEXT NOT NULL,
     state TEXT NOT NULL,
     county TEXT,
@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS zip_codes (
 
 -- Create indexes
 CREATE INDEX IF NOT EXISTS idx_user_permissions_user_id ON user_permissions(user_id);
-CREATE INDEX IF NOT EXISTS idx_zip_codes_zip_code ON zip_codes(zip_code);
+CREATE INDEX IF NOT EXISTS idx_zip_codes_zip_code ON "zipCodes"("zipCode");
 
 -- Create triggers for updating timestamps
 CREATE TRIGGER update_users_updated_at
@@ -51,6 +51,6 @@ CREATE TRIGGER update_user_permissions_updated_at
     EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_zip_codes_updated_at
-    BEFORE UPDATE ON zip_codes
+    BEFORE UPDATE ON "zipCodes"
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column(); 

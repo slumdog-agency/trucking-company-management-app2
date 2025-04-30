@@ -5,6 +5,7 @@ export type Schema = {
     percentage: number;
     first_name: string;
     last_name: string;
+    dispatcher?: string | null;
     dispatcher_id?: number | null;
     truck?: string | null;
     trailer?: string | null;
@@ -71,11 +72,11 @@ export type Schema = {
   };
 
   dispatchers: {
-    id?: number;
+    dispatcher_id: number;
     first_name: string;
     last_name: string;
-    email?: string | null;
-    phone?: string | null;
+    email?: string;
+    phone?: string;
     created_at?: string;
     updated_at?: string;
   };
@@ -108,6 +109,7 @@ export type Schema = {
   divisions: {
     id?: number;
     name: string;
+    companyName?: string;
     description?: string | null;
     mc?: string | null;
     dot?: string | null;

@@ -1,11 +1,30 @@
 export type Schema = {
   dispatchers: {
-    id: number;
-    name: string;
-    email: string;
-    phone: string;
-    created_at: string;
-    updated_at: string;
+    dispatcher_id: number;
+    first_name: string;
+    last_name: string;
+    email?: string;
+    phone?: string;
+    created_at?: string;
+    updated_at?: string;
+  };
+  drivers: {
+    id?: number;
+    count: number;
+    percentage: number;
+    first_name: string;
+    last_name: string;
+    email?: string;
+    phone?: string;
+    dispatcher_id?: number;
+    dispatcher?: string;
+    truck?: string;
+    trailer?: string;
+    emergency_contact_name?: string;
+    emergency_contact_phone?: string;
+    category?: string;
+    created_at?: string;
+    updated_at?: string;
   };
   routes: {
     id: number;
