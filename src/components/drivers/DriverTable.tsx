@@ -11,8 +11,6 @@ import {
   FileText, 
   Filter, 
   X, 
-  ChevronDown, 
-  ChevronUp,
   SlidersHorizontal
 } from "lucide-react";
 import {
@@ -58,7 +56,7 @@ export function DriverTable({ currentDate }: DriverTableProps) {
   const { toast } = useToast();
   const navigate = useNavigate();
   const weekDays = getWeekDays(currentDate);
-  const { data: session } = fine.auth.useSession();
+  fine.auth.useSession();
   const tableRef = useRef<HTMLTableElement>(null);
 
   // Fetch drivers and routes for the current week

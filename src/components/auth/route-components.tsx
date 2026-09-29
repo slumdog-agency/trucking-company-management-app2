@@ -7,7 +7,6 @@ export const ProtectedRoute = ({ Component }: { Component: () => JSX.Element }) 
     const { 
         data: session, 
         isPending, //loading state
-        error, //error object
     } = fine.auth.useSession()
 
     if (isPending) return <div></div>;

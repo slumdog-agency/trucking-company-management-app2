@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Truck, Users } from "lucide-react";
+import { Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fine } from "@/lib/fine";
 import { useNavigate } from "react-router-dom";

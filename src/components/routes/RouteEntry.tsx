@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Schema } from "@/lib/db-types";
 import { Button } from "@/components/ui/button";
-import { Plus, MapPin, DollarSign, Edit2, Copy, Check } from "lucide-react";
+import { Plus, MapPin, Edit2, Copy, Check } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { RouteForm } from "./RouteForm";
 import {
@@ -140,7 +140,7 @@ export function RouteEntry({ driverId, date, routes, onAddRoute, onUpdateRoute }
                             try {
                               const comments = JSON.parse(route.comments);
                               return comments.length > 0 ? comments[comments.length - 1].text : '';
-                            } catch (e) {
+                            } catch {
                               return '';
                             }
                           })()}

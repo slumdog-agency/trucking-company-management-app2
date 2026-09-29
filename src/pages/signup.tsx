@@ -66,7 +66,7 @@ export default function SignupForm() {
     setIsLoading(true);
 
     try {
-      const { data, error } = await fine.auth.signUp.email(
+      const { error } = await fine.auth.signUp.email(
         {
           email: formData.email,
           password: formData.password,
@@ -97,10 +97,10 @@ export default function SignupForm() {
       if (error) {
         throw error;
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error",
-        description: error.message || "Something went wrong. Please try again.",
+        description: (error as { message?: string }).message || "Something went wrong. Please try again.",
         variant: "destructive",
       });
     } finally {

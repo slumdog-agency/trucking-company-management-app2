@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { fine } from "@/lib/fine";
 import { useToast } from "@/hooks/use-toast";
-import { Edit2, Save, Trash2, Plus, Search, Check, X, Download, FileText } from "lucide-react";
+import { Plus, Search, X, Download, FileText } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -22,8 +22,6 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Schema } from "@/lib/db-types";
 import {
   DropdownMenu,
   DropdownMenuContent,

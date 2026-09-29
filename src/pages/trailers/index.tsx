@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Schema } from "@/lib/db-types";
 import { fine } from "@/lib/fine";
 import { useToast } from "@/hooks/use-toast";
-import { Edit2, Save, Trash2, Plus, Search, Download, FileText, X } from "lucide-react";
+import { Edit2, Trash2, Plus, Search, Download, FileText, X } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -90,20 +90,6 @@ export default function TrailersPage() {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     
-    if (editingTrailer) {
-      setEditingTrailer(prev => ({
-        ...prev!,
-        [name]: value
-      }));
-    } else {
-      setNewTrailer(prev => ({
-        ...prev,
-        [name]: value
-      }));
-    }
-  };
-
-  const handleSelectChange = (name: string, value: string) => {
     if (editingTrailer) {
       setEditingTrailer(prev => ({
         ...prev!,

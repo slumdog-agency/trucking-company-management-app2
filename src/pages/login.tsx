@@ -64,7 +64,7 @@ export default function LoginForm() {
     setIsLoading(true);
 
     try {
-      const { data, error } = await fine.auth.signIn.email(
+      await fine.auth.signIn.email(
         {
           email: formData.email,
           password: formData.password,
@@ -91,10 +91,10 @@ export default function LoginForm() {
           },
         }
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error",
-        description: error.message || "Invalid email or password.",
+        description: (error as { message?: string }).message || "Invalid email or password.",
         variant: "destructive",
       });
     } finally {

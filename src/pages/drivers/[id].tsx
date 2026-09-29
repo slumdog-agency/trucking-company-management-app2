@@ -33,7 +33,7 @@ export default function DriverProfilePage() {
   const { id } = useParams<{ id: string }>();
   const [driver, setDriver] = useState<Schema["drivers"] | null>(null);
   const [routes, setRoutes] = useState<Schema["routes"][]>([]);
-  const [dispatcher, setDispatcher] = useState<Schema["dispatchers"] | null>(null);
+  const [, setDispatcher] = useState<Schema["dispatchers"] | null>(null);
   const [truck, setTruck] = useState<Schema["trucks"] | null>(null);
   const [trailer, setTrailer] = useState<Schema["trailers"] | null>(null);
   const [loading, setLoading] = useState(true);

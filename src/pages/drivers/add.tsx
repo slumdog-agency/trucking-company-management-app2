@@ -375,11 +375,6 @@ export default function AddDriverPage() {
     }
   };
 
-  // Filter trucks based on selected category
-  const filteredTrucks = trucks.filter(truck => 
-    formData.category === "All" || truck.category === formData.category
-  );
-
   // Only show trailers for Semi trucks
   const showTrailerSection = formData.category !== "Box";
 

@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { Schema } from "@/lib/db-types";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Edit2, Save, Trash2, Phone } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { RouteEntry } from "@/components/routes/RouteEntry";
@@ -13,7 +12,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Link } from "react-router-dom";
 
 interface DriverRowProps {
   driver: Schema["drivers"];
@@ -39,8 +37,6 @@ export function DriverRow({
   driver, 
   weekDays, 
   routes,
-  trucks,
-  trailers,
   onUpdateDriver,
   onDeleteDriver,
   onAddRoute,
@@ -71,14 +67,6 @@ export function DriverRow({
       fetchDispatchers();
     }
   }, [isEditing]);
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setEditedDriver(prev => ({
-      ...prev,
-      [name]: name === 'count' || name === 'percentage' ? parseFloat(value) : value
-    }));
-  };
 
   const handleDispatcherChange = (value: string) => {
     const selectedDispatcher = dispatchers.find(d => d.id === parseInt(value));
@@ -119,11 +107,6 @@ export function DriverRow({
     return total + route.rate;
   }, 0);
   
-  // Calculate total miles
-  const totalMiles = driverRoutes.reduce((total, route) => {
-    return total + (route.mileage || 0);
-  }, 0);
-
   // Calculate gross difference
   const grossDifference = driverRoutes.reduce((total, route) => {
     return total + (route.soldFor ? route.rate - route.soldFor : 0);
