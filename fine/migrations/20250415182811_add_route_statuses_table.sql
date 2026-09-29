@@ -10,7 +10,7 @@ CREATE TABLE routeStatuses (
 );
 
 -- Insert default route statuses
-INSERT INTO routeStatuses (name, color, isDefault, sortOrder) VALUES
+INSERT OR IGNORE INTO routeStatuses (name, color, isDefault, sortOrder) VALUES
 ('Empty', '#FF9E44', TRUE, 1),
 ('Service', '#4169E1', FALSE, 2),
 ('Driving previous route', '#FFB6C1', FALSE, 3),

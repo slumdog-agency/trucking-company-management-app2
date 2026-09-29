@@ -52,7 +52,7 @@ export type Schema = {
   routeAudits: {
     id?: number;
     routeId: number;
-    userId?: number | null;
+    userId?: string | null;
     userName?: string | null;
     changedFields: string;
     oldValues?: string | null;
