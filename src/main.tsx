@@ -34,20 +34,20 @@ createRoot(document.getElementById("root")!).render(
       <ThemeProvider>
         <BrowserRouter>
           <Routes>
-            <Route path='/' element={<Index />} />
+            <Route path='/' element={<ProtectedRoute Component={Index} />} />
             <Route path='/login' element={<LoginForm />} />
             <Route path='/signup' element={<SignupForm />} />
             <Route path='/logout' element={<Logout />} />
-            <Route path='/drivers' element={<DriversPage />} />
-            <Route path='/drivers/:id' element={<DriverProfilePage />} />
-            <Route path='/drivers/add' element={<AddDriverPage />} />
-            <Route path='/dispatchers' element={<DispatchersPage />} />
-            <Route path='/settings' element={<SettingsPage />} />
-            <Route path='/settings/route-statuses' element={<RouteStatusesPage />} />
-            <Route path='/trucks' element={<TrucksPage />} />
-            <Route path='/trailers' element={<TrailersPage />} />
-            <Route path='/divisions' element={<DivisionsPage />} />
-            <Route path='/users' element={<UsersPage />} />
+            <Route path='/drivers' element={<ProtectedRoute Component={DriversPage} />} />
+            <Route path='/drivers/:id' element={<ProtectedRoute Component={DriverProfilePage} />} />
+            <Route path='/drivers/add' element={<ProtectedRoute Component={AddDriverPage} />} />
+            <Route path='/dispatchers' element={<ProtectedRoute Component={DispatchersPage} />} />
+            <Route path='/settings' element={<ProtectedRoute Component={SettingsPage} />} />
+            <Route path='/settings/route-statuses' element={<ProtectedRoute Component={RouteStatusesPage} />} />
+            <Route path='/trucks' element={<ProtectedRoute Component={TrucksPage} />} />
+            <Route path='/trailers' element={<ProtectedRoute Component={TrailersPage} />} />
+            <Route path='/divisions' element={<ProtectedRoute Component={DivisionsPage} />} />
+            <Route path='/users' element={<ProtectedRoute Component={UsersPage} />} />
           </Routes>
         </BrowserRouter>
         <Sonner />
