@@ -1,50 +1,39 @@
-# React + TypeScript + Vite
+# Trucking Manager
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Dispatch and fleet management app for a trucking company.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Weekly dispatch board** – drivers as rows, Mon–Sun as columns, routes (loads) in the day cells
+- **Route form** – pickup/delivery ZIP with automatic city/state lookup, mileage, rate, division, status, comments and an audit trail
+- **Drivers, dispatchers, trucks, trailers, divisions** – CRUD pages
+- **Users and permissions** – per-section read/write permissions
+- **Settings** – customizable route statuses and colors
+- **PDF export** of routes
 
-## Expanding the ESLint configuration
+## Stack
 
-If you are developing a production application, we recommend updating the configuration to enable type aware lint rules:
+Vite, React 18, TypeScript, react-router, Tailwind + shadcn/ui. Backend and auth are provided by the
+hosted [Fine](https://fine.dev) platform through `@fine-dev/fine-js` (see `src/lib/fine.ts`).
 
-- Configure the top-level `parserOptions` property like this:
+## Development
 
-```js
-export default tseslint.config({
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+```bash
+npm install
+npm run dev      # http://localhost:5173
+npm run build
+npm run lint
 ```
 
-- Replace `tseslint.configs.recommended` to `tseslint.configs.recommendedTypeChecked` or `tseslint.configs.strictTypeChecked`
-- Optionally add `...tseslint.configs.stylisticTypeChecked`
-- Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and update the config:
+## Database
 
-```js
-// eslint.config.js
-import react from 'eslint-plugin-react'
+SQL migrations live in `fine/migrations`. To apply them to a local SQLite file (`fine.db`):
 
-export default tseslint.config({
-  // Set the react version
-  settings: { react: { version: '18.3' } },
-  plugins: {
-    // Add the react plugin
-    react,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended rules
-    ...react.configs.recommended.rules,
-    ...react.configs['jsx-runtime'].rules,
-  },
-})
+```bash
+npm run db:init
 ```
+
+Applied migrations are tracked in a `schema_migrations` table, so the command is safe to re-run.
+`node fine/populate-zip-codes.js` pre-fills the `zipCodes` table from ZIPs already used in routes.
+
+TypeScript types for the tables are in `src/lib/db-types.ts`; keep them in sync with the migrations.
