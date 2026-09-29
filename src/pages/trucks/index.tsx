@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Schema } from "@/lib/db-types";
 import { fine } from "@/lib/fine";
 import { useToast } from "@/hooks/use-toast";
-import { Edit2, Save, Trash2, Plus, Search, Download, FileText } from "lucide-react";
+import { Edit2, Trash2, Plus, Search, Download, FileText, X } from "lucide-react";
 import {
   Table,
   TableBody,

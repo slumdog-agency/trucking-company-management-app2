@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Schema } from "@/lib/db-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Calendar, ChevronDown, ChevronUp, Clock, User, ChevronRight, Copy, Check, DollarSign } from "lucide-react";
+import { Loader2, Clock, User, ChevronRight, Copy, Check } from "lucide-react";
 import { calculateDistance, getLocationFromZip, saveZipCodeLocation, formatCurrency } from "@/lib/utils";
 import { ZipCodeInput } from "@/components/ui/ZipCodeInput";
 import { fine } from "@/lib/fine";
@@ -78,9 +78,9 @@ export function RouteForm({ driverId, date, route, onSubmit, isEditing = false }
       comments: ""
     }
   );
-  const [originalData, setOriginalData] = useState<Schema["routes"] | null>(route || null);
-  const [pickupLocation, setPickupLocation] = useState<{city: string, state: string, county: string} | null>(null);
-  const [deliveryLocation, setDeliveryLocation] = useState<{city: string, state: string, county: string} | null>(null);
+  const [originalData] = useState<Schema["routes"] | null>(route || null);
+  const [, setPickupLocation] = useState<{city: string, state: string, county: string} | null>(null);
+  const [, setDeliveryLocation] = useState<{city: string, state: string, county: string} | null>(null);
   const [calculatedMileage, setCalculatedMileage] = useState<number | null>(route?.mileage || null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [divisions, setDivisions] = useState<Schema["divisions"][]>([]);
@@ -248,7 +248,7 @@ export function RouteForm({ driverId, date, route, onSubmit, isEditing = false }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    const numValue = name === 'rate' || name === 'mileage' || name === 'soldFor' ? parseFloat(value) : value;
+    const numValue = name === 'rate' || name === 'mileage' || name === 'soldFor' ? parseFloat(String(value)) : value;
     
     setFormData(prev => ({
       ...prev,
@@ -517,7 +517,7 @@ export function RouteForm({ driverId, date, route, onSubmit, isEditing = false }
   const getChangedFields = () => {
     if (!originalData) return {};
     
-    const changedFields: Record<string, { old: any, new: any }> = {};
+    const changedFields: Record<string, { old: string | number | null | undefined, new: string | number | null | undefined }> = {};
     
     // Compare each field
     Object.keys(formData).forEach(key => {
@@ -599,17 +599,17 @@ export function RouteForm({ driverId, date, route, onSubmit, isEditing = false }
           // Create audit record
           await fine.table("routeAudits").insert({
             routeId: route.id,
-            userId: session?.user?.id ? parseInt(session.user.id) : null,
+            userId: session?.user?.id ?? null,
             userName: session?.user?.name || session?.user?.email || "Unknown user",
             changedFields: JSON.stringify(Object.keys(changedFields)),
             oldValues: JSON.stringify(Object.entries(changedFields).reduce((acc, [key, value]) => {
               acc[key] = value.old;
               return acc;
-            }, {} as Record<string, any>)),
+            }, {} as Record<string, unknown>)),
             newValues: JSON.stringify(Object.entries(changedFields).reduce((acc, [key, value]) => {
               acc[key] = value.new;
               return acc;
-            }, {} as Record<string, any>))
+            }, {} as Record<string, unknown>))
           });
         }
       }
@@ -660,19 +660,19 @@ export function RouteForm({ driverId, date, route, onSubmit, isEditing = false }
   };
 
   // Format field value for display
-  const formatFieldValue = (fieldName: string, value: any) => {
+  const formatFieldValue = (fieldName: string, value: string | number | null | undefined) => {
     if (value === null || value === undefined) return "None";
     
     if (fieldName.includes("date")) {
       try {
         return new Date(value).toLocaleDateString();
-      } catch (e) {
+      } catch {
         return value;
       }
     }
     
     if (fieldName === "rate" || fieldName === "soldFor") {
-      return formatCurrency(parseFloat(value));
+      return formatCurrency(parseFloat(String(value)));
     }
     
     if (fieldName === "mileage") {
@@ -680,7 +680,7 @@ export function RouteForm({ driverId, date, route, onSubmit, isEditing = false }
     }
     
     if (fieldName === "divisionId") {
-      const division = divisions.find(d => d.id === parseInt(value));
+      const division = divisions.find(d => d.id === parseInt(String(value)));
       return division ? division.companyName : value;
     }
     
@@ -1002,7 +1002,7 @@ export function RouteForm({ driverId, date, route, onSubmit, isEditing = false }
             id="pickupZip"
             name="pickupZip"
             value={formData.pickupZip}
-            onChange={(e) => handleZipChange('pickupZip', e.target.value)}
+            onChange={(value) => handleZipChange('pickupZip', value)}
             onLocationChange={(location) => {
               setPickupLocation(location);
               setFormData(prev => ({
@@ -1024,7 +1024,7 @@ export function RouteForm({ driverId, date, route, onSubmit, isEditing = false }
             id="deliveryZip"
             name="deliveryZip"
             value={formData.deliveryZip}
-            onChange={(e) => handleZipChange('deliveryZip', e.target.value)}
+            onChange={(value) => handleZipChange('deliveryZip', value)}
             onLocationChange={(location) => {
               setDeliveryLocation(location);
               setFormData(prev => ({

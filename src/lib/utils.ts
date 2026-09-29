@@ -56,54 +56,43 @@ const zipCodeDatabase: Record<string, { city: string, state: string, county: str
 };
 
 export async function getLocationFromZip(zipCode: string): Promise<{ city: string, state: string, county: string }> {
+  const unknown = { city: "Unknown City", state: "Unknown State", county: "" };
+  if (!/^\d{5}$/.test(zipCode)) return unknown;
+
+  // Check the local zipCodes cache first
   try {
-    // First check if we have this zip code in our database
-    const zipData = await fine.table("zipCodes").select().eq("zipCode", zipCode);
-    
-    if (zipData && zipData.length > 0) {
-      return {
-        city: zipData[0].city,
-        state: zipData[0].state,
-        county: zipData[0].county || ""
-      };
+    const cached = await fine.table("zipCodes").select().eq("zipCode", zipCode);
+    if (cached && cached.length > 0) {
+      return { city: cached[0].city, state: cached[0].state, county: cached[0].county || "" };
     }
-    
-    // If not in our database, check the local fallback
-    const location = zipCodeDatabase[zipCode];
-    
-    if (location) {
-      return {
-        city: location.city,
-        state: location.state,
-        county: location.county
-      };
+  } catch (error) {
+    console.error("Error reading zip code cache:", error);
+  }
+
+  try {
+    const response = await fetch(`https://api.zippopotam.us/us/${zipCode}`);
+    if (!response.ok) {
+      throw new Error('Invalid ZIP code or lookup failed');
     }
-    
-    // If not found in our database or local fallback, return a placeholder
-    return {
-      city: "Unknown City",
-      state: "Unknown State",
-      county: ""
-    };
+
+    const data = await response.json();
+    if (!data.places || !data.places[0]) {
+      throw new Error('Invalid ZIP code or lookup failed');
+    }
+
+    const place = data.places[0];
+    // Format city name to be title case (e.g., "New York" instead of "NEW YORK")
+    const city = place['place name'].split(' ')
+      .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+
+    // zippopotam.us does not provide counties
+    const location = { city, state: place['state abbreviation'], county: "" };
+    await saveZipCodeLocation(zipCode, location.city, location.state, location.county);
+    return location;
   } catch (error) {
     console.error("Error fetching zip code data:", error);
-    
-    // Fallback to local database if API fails
-    const location = zipCodeDatabase[zipCode];
-    
-    if (location) {
-      return {
-        city: location.city,
-        state: location.state,
-        county: location.county
-      };
-    }
-    
-    return {
-      city: "Unknown City",
-      state: "Unknown State",
-      county: ""
-    };
+    return unknown;
   }
 }
 
@@ -201,7 +190,13 @@ export async function calculateDistance(originZip: string, destinationZip: strin
 // App settings management
 export const APP_SETTINGS_KEY = "truckingAppSettings";
 
-export function saveAppSettings(settings: Record<string, any>): void {
+export type AppSettings = {
+  defaultDriverPercentage: number;
+  showWeeklyTotals: boolean;
+  enableNotifications: boolean;
+};
+
+export function saveAppSettings(settings: Partial<AppSettings>): void {
   try {
     const currentSettings = getAppSettings();
     const updatedSettings = { ...currentSettings, ...settings };
@@ -211,7 +206,7 @@ export function saveAppSettings(settings: Record<string, any>): void {
   }
 }
 
-export function getAppSettings(): Record<string, any> {
+export function getAppSettings(): AppSettings {
   try {
     const settings = localStorage.getItem(APP_SETTINGS_KEY);
     return settings ? JSON.parse(settings) : {
