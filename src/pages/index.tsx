@@ -12,8 +12,8 @@ const Index = () => {
       
       <main className="flex-1 container mx-auto py-5 px-3">
         <div className="mb-5">
-          <h1 className="text-2xl font-bold tracking-tight">Trucking Dashboard</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
+          <h1 className="text-xl font-bold tracking-tight">Trucking Dashboard</h1>
+          <p className="text-muted-foreground mt-1 text-xs">
             Manage your drivers, routes, and track earnings
           </p>
         </div>
